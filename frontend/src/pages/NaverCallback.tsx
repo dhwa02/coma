@@ -21,7 +21,7 @@ export default function NaverCallback() {
 
     axios
       .post('http://localhost:4000/api/auth/naver/token', { code, state }, { withCredentials: true })
-      .then(() => navigate('/'))
+      .then(() => navigate('/dashboard'))
       .catch((err) => {
         const reason = err.response?.data?.error ?? err.response?.data?.message ?? err.message;
         console.error('[NaverCallback Error]', err.response?.data ?? err.message);

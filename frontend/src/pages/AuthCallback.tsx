@@ -19,7 +19,7 @@ export default function AuthCallback() {
 
     axios
       .post('http://localhost:4000/api/auth/kakao/token', { code }, { withCredentials: true })
-      .then(() => navigate('/'))
+      .then(() => navigate('/dashboard'))
       .catch((err) => {
         const reason = err.response?.data?.error?.error_code ?? err.response?.data?.message ?? err.message;
         console.error('[AuthCallback Error]', err.response?.data ?? err.message);

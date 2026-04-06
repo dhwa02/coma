@@ -1,206 +1,100 @@
 .login-wrap {
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #F0EEF8;
+  background: var(--bg, #F7F4FF);
   padding: 24px;
+  position: relative;
+  overflow: hidden;
 }
 
-/* ── 로고 ── */
-.login-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: #fff;
-  border-radius: 24px;
-  padding: 10px 20px;
-  margin-bottom: 28px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-
-.login-logo-icon {
-  width: 32px;
-  height: 32px;
+/* ── 블롭 배경 ── */
+.login-blob {
+  position: absolute;
   border-radius: 50%;
-  background: linear-gradient(135deg, #a78bfa, #60a5fa);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
+  filter: blur(70px);
+  pointer-events: none;
+  animation: login-drift 8s ease-in-out infinite;
 }
 
-.login-logo-text {
-  font-size: 16px;
-  font-weight: 700;
-  color: #7B52B9;
+.login-blob1 { width: 360px; height: 360px; background: #C4B5FD33; top: -80px;   left: -100px; animation-delay: 0s;  }
+.login-blob2 { width: 280px; height: 280px; background: #93C5FD33; bottom: -60px; right: -80px; animation-delay: -3s; }
+.login-blob3 { width: 220px; height: 220px; background: #FFB3C833; bottom: 80px;  left: 5%;    animation-delay: -5s; }
+
+@keyframes login-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%       { transform: translate(20px, -20px) scale(1.05); }
+  66%       { transform: translate(-15px, 15px) scale(0.97); }
 }
 
 /* ── 카드 ── */
 .login-card {
   width: 100%;
   max-width: 420px;
-  background: #fff;
-  border-radius: 24px;
-  padding: 40px 36px 32px;
-  box-shadow: 0 4px 32px rgba(0, 0, 0, 0.08);
-}
-
-.login-title {
-  font-size: 26px;
-  font-weight: 800;
-  color: #1E1A2E;
-  margin-bottom: 28px;
-  letter-spacing: -0.5px;
-}
-
-/* ── 필드 ── */
-.login-field {
-  margin-bottom: 18px;
-}
-
-.login-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 700;
-  color: #1E1A2E;
-  margin-bottom: 8px;
-}
-
-.login-input-wrap {
+  background: var(--surface, #fff);
+  border-radius: 28px;
+  padding: 48px 40px 40px;
+  box-shadow: 0 8px 48px rgba(120, 100, 200, 0.13);
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.07));
+  text-align: center;
   position: relative;
+  z-index: 1;
+  animation: login-fadeUp 0.65s ease both;
 }
 
-.login-input {
-  width: 100%;
-  padding: 14px 16px;
-  border: 1.5px solid #E5E1F5;
-  border-radius: 14px;
-  font-size: 14px;
-  color: #1E1A2E;
-  background: #fff;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.login-input::placeholder {
-  color: #B0ADCA;
-}
-
-.login-input:focus {
-  border-color: #a78bfa;
-}
-
-.login-input.has-icon {
-  padding-right: 46px;
-}
-
-.login-input-icon {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 16px;
-  color: #B0ADCA;
-  cursor: pointer;
-  user-select: none;
-}
-
-/* ── 체크박스 ── */
-.login-remember {
-  display: flex;
+/* ── 뱃지 ── */
+.login-badge {
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  background: var(--purple, #EDE0FF);
+  color: var(--purple-t, #7B52B9);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
   margin-bottom: 24px;
 }
 
-.login-remember input[type='checkbox'] {
-  width: 17px;
-  height: 17px;
-  accent-color: #7B52B9;
-  cursor: pointer;
-  border-radius: 4px;
+/* ── 브랜드명 ── */
+.login-brand {
+  margin-bottom: 14px;
 }
 
-.login-remember label {
-  font-size: 13px;
-  color: #6B6880;
-  cursor: pointer;
+.login-brand-name {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: -1.5px;
+  background: linear-gradient(135deg, #C4B5FD, #93C5FD, #FFB3C8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-/* ── 로그인 버튼 ── */
-.login-btn {
-  width: 100%;
-  padding: 16px;
-  border: none;
-  border-radius: 50px;
-  background: linear-gradient(90deg, #6366f1, #a855f7);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 700;
-  font-family: inherit;
-  cursor: pointer;
-  transition: opacity 0.15s, transform 0.15s;
-  margin-bottom: 20px;
-}
-
-.login-btn:hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-}
-
-/* ── 링크 ── */
-.login-links {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
+/* ── 설명 ── */
+.login-desc {
+  font-size: 14px;
+  color: var(--text2, #6B6880);
+  line-height: 1.75;
   margin-bottom: 28px;
 }
 
-.login-links a {
-  font-size: 13px;
-  color: #6B6880;
-  text-decoration: none;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.login-links a:hover {
-  color: #7B52B9;
-}
-
-.login-links-divider {
-  width: 1px;
-  height: 12px;
-  background: #D1CDE8;
-}
-
-/* ── 소셜 구분선 ── */
-.login-social-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.login-social-divider::before,
-.login-social-divider::after {
-  content: '';
-  flex: 1;
+/* ── 구분선 ── */
+.login-divider {
   height: 1px;
-  background: #E5E1F5;
+  background: var(--border, rgba(0, 0, 0, 0.07));
+  margin-bottom: 24px;
 }
 
-.login-social-divider span {
-  font-size: 12px;
-  color: #B0ADCA;
-  white-space: nowrap;
+/* ── 소셜 버튼 ── */
+.login-social-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-/* ── 소셜 이미지 버튼 ── */
 .login-social-img-btn {
   width: 100%;
   background: none;
@@ -214,20 +108,13 @@
 
 .login-social-img-btn:hover {
   filter: brightness(0.95);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
 }
 
 .login-social-img-btn img {
   width: 100%;
   height: auto;
   display: block;
-}
-
-/* ── 소셜 버튼 ── */
-.login-social-btns {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
 }
 
 .login-social-btn {
@@ -247,28 +134,13 @@
 
 .login-social-btn:hover {
   filter: brightness(0.95);
-  transform: translateY(-1px);
-}
-
-.login-social-btn.kakao {
-  background: #FEE500;
-  color: #3C1E1E;
-  justify-content: center;
-  gap: 8px;
-}
-
-.login-social-btn.kakao .social-icon {
-  position: absolute;
-  left: 18px;
-  width: 22px;
-  height: 22px;
+  transform: translateY(-2px);
 }
 
 .login-social-btn.naver {
   background: #03C75A;
   color: #fff;
   justify-content: center;
-  gap: 8px;
 }
 
 .naver-n {
@@ -278,4 +150,9 @@
   font-weight: 900;
   color: #fff;
   line-height: 1;
+}
+
+@keyframes login-fadeUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

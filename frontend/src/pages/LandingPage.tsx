@@ -222,6 +222,8 @@ function Section3() {
 }
 
 function Cta() {
+  const navigate = useNavigate();
+
   return (
     <div className="lp-cta-section" id="cta">
       <div className="lp-cta-box">
@@ -230,7 +232,7 @@ function Cta() {
           회원가입 후 30초면 첫 지출을 기록할 수 있어요<br />
         </p>
         <div className="lp-hero-btns" style={{ justifyContent: 'center' }}>
-          <button className="lp-btn-primary">계정 만들기 →</button>
+          <button className="lp-btn-primary" onClick={() => navigate('/login')}>계정 만들기 →</button>
         </div>
       </div>
     </div>
