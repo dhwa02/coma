@@ -8,6 +8,7 @@ const cookieParser = require('cookie-parser');
 const sequelize = require('./config/db');
 const authRoutes = require('./routes/auth');
 const transactionRoutes = require('./routes/transactions');
+const dutchPayRoutes = require('./routes/dutchPays');
 
 const app = express();
 
@@ -22,6 +23,7 @@ app.use(cookieParser());
 
 app.use('/api/auth', authRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/dutch-pays', dutchPayRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 

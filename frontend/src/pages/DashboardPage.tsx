@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -32,7 +32,31 @@ interface TransactionForm {
   paymentMethod: string;
 }
 
-type ViewMode = 'list' | 'calendar' | 'stats';
+type ViewMode = 'list' | 'calendar' | 'stats' | 'dutch';
+
+// ── Dutch Pay Types ─────────────────────────────────────────────────
+interface DutchPayParticipant {
+  id: number;
+  dutchPayId: number;
+  name: string;
+  amountOwed: number;
+  isPaid: boolean;
+  paidAt: string | null;
+  isPayer: boolean;
+}
+
+interface DutchPay {
+  id: number;
+  title: string;
+  totalAmount: number;
+  participantCount: number;
+  memo: string | null;
+  date: string;
+  isUserPayer: boolean;
+  linkedTransactionId: number | null;
+  category: string | null;
+  participants: DutchPayParticipant[];
+}
 
 // ── 카테고리 정보 ──────────────────────────────────────────────────
 const CATEGORIES = {
@@ -76,9 +100,11 @@ interface ModalProps {
   onClose: () => void;
   onSave: (form: TransactionForm) => void;
   loading: boolean;
+  defaultType?: 'income' | 'expense';
 }
 
-function TransactionModal({ target, onClose, onSave, loading }: ModalProps) {
+function TransactionModal({ target, onClose, onSave, loading, defaultType }: ModalProps) {
+  const initType = defaultType ?? 'expense';
   const [form, setForm] = useState<TransactionForm>(
     target
       ? {
@@ -89,7 +115,7 @@ function TransactionModal({ target, onClose, onSave, loading }: ModalProps) {
           date: target.date,
           paymentMethod: target.paymentMethod ?? '카드 결제',
         }
-      : DEFAULT_FORM
+      : { ...DEFAULT_FORM, type: initType, category: CATEGORIES[initType][0].name }
   );
 
   const set = (key: keyof TransactionForm, value: string) =>
@@ -187,6 +213,363 @@ function DeleteConfirm({ onCancel, onConfirm, loading }: DeleteConfirmProps) {
           <button className="db-btn-delete" onClick={onConfirm} disabled={loading}>{loading ? '삭제 중...' : '삭제'}</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Dutch Pay Create Modal ─────────────────────────────────────────
+interface DutchPayCreateModalProps {
+  onClose: () => void;
+  onSave: (data: {
+    title: string; totalAmount: string; participants: string[];
+    memo: string; date: string; isUserPayer: boolean; payerIndex: number; category: string;
+  }) => void;
+  loading: boolean;
+}
+
+function DutchPayCreateModal({ onClose, onSave, loading }: DutchPayCreateModalProps) {
+  const [title, setTitle] = useState('');
+  const [totalAmount, setTotalAmount] = useState('');
+  const [memo, setMemo] = useState('');
+  const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [participants, setParticipants] = useState<string[]>(['', '']);
+  const [isUserPayer, setIsUserPayer] = useState(false);
+  const [payerIndex, setPayerIndex] = useState(0);
+  const [category, setCategory] = useState('식비');
+
+  const validParticipants = participants.map(p => p.trim()).filter(Boolean);
+  const perPerson = totalAmount && validParticipants.length >= 2
+    ? Math.ceil(Number(totalAmount) / validParticipants.length)
+    : 0;
+
+  const addParticipant = () => setParticipants(prev => [...prev, '']);
+  const removeParticipant = (i: number) => {
+    setParticipants(prev => prev.filter((_, idx) => idx !== i));
+    if (payerIndex >= i && payerIndex > 0) setPayerIndex(p => p - 1);
+  };
+  const updateParticipant = (i: number, val: string) =>
+    setParticipants(prev => prev.map((p, idx) => idx === i ? val : p));
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const valid = participants.map(p => p.trim()).filter(Boolean);
+    if (!title.trim() || !totalAmount || Number(totalAmount) <= 0 || valid.length < 2) return;
+    onSave({ title: title.trim(), totalAmount, participants: valid, memo: memo.trim(), date, isUserPayer, payerIndex, category });
+  };
+
+  // payerIndex를 실제 입력된 참여자 인덱스로 매핑 (빈 칸 건너뜀)
+  const filledIndices = participants.map((p, i) => ({ raw: i, val: p.trim() })).filter(x => x.val);
+
+  return (
+    <div className="db-overlay" onClick={onClose}>
+      <div className="db-modal dutch-modal" onClick={e => e.stopPropagation()}>
+        <div className="db-modal-header">
+          <h3>더치페이 만들기</h3>
+          <button className="db-modal-close" onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="db-field">
+            <label>제목</label>
+            <input className="db-input" placeholder="예) 점심 식사" value={title} onChange={e => setTitle(e.target.value)} maxLength={50} required />
+          </div>
+          <div className="db-field">
+            <label>총 금액</label>
+            <div className="db-amount-wrap">
+              <input className="db-input" type="number" placeholder="0" min="1" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} required />
+              <span className="db-amount-unit">원</span>
+            </div>
+          </div>
+          <div className="db-field">
+            <label>날짜</label>
+            <input className="db-input" type="date" value={date} onChange={e => setDate(e.target.value)} required />
+          </div>
+
+          {/* 참여자 입력 */}
+          <div className="db-field">
+            <div className="dutch-participant-header">
+              <label>참여자</label>
+              <button type="button" className="dutch-add-participant-btn" onClick={addParticipant}>+ 추가</button>
+            </div>
+            <div className="dutch-participant-list">
+              {participants.map((p, i) => (
+                <div key={i} className="dutch-participant-row">
+                  <input
+                    className="db-input dutch-participant-input"
+                    placeholder={`참여자 ${i + 1}`}
+                    value={p}
+                    onChange={e => updateParticipant(i, e.target.value)}
+                    maxLength={20}
+                  />
+                  {participants.length > 2 && (
+                    <button type="button" className="dutch-remove-btn" onClick={() => removeParticipant(i)}>✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            {perPerson > 0 && (
+              <div className="dutch-per-person-preview">
+                1인당 <strong>{perPerson.toLocaleString('ko-KR')}원</strong> ({validParticipants.length}명)
+              </div>
+            )}
+          </div>
+
+          {/* 대표 지출자 토글 */}
+          <div className="db-field">
+            <label
+              className="dutch-payer-toggle-label"
+              onClick={() => setIsUserPayer(v => !v)}
+            >
+              <span className={`dutch-payer-toggle ${isUserPayer ? 'on' : ''}`}>
+                <span className="dutch-payer-toggle-knob" />
+              </span>
+              <span className="dutch-payer-toggle-text">내가 대표 지출자 (전체 금액을 먼저 결제했어요)</span>
+            </label>
+          </div>
+
+          {isUserPayer && (
+            <>
+              <div className="db-field dutch-payer-detail-field">
+                <label>참여자 목록에서 내 이름 선택</label>
+                <select
+                  className="db-input db-select"
+                  value={payerIndex}
+                  onChange={e => setPayerIndex(Number(e.target.value))}
+                >
+                  {filledIndices.map(({ raw, val }) => (
+                    <option key={raw} value={raw}>{val}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="db-field dutch-payer-detail-field">
+                <label>지출 카테고리</label>
+                <div className="db-cat-grid">
+                  {CATEGORIES.expense.map(c => (
+                    <button key={c.name} type="button"
+                      className={`db-cat-chip${category === c.name ? ' active' : ''}`}
+                      style={{ '--cat-bg': c.bg } as React.CSSProperties}
+                      onClick={() => setCategory(c.name)}
+                    >
+                      {c.icon} {c.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="dutch-payer-info-box">
+                💡 정산이 완료될 때마다 지출 내역 금액이 자동으로 차감됩니다.
+              </div>
+            </>
+          )}
+
+          <div className="db-field">
+            <label>메모 <span className="db-optional">(선택)</span></label>
+            <input className="db-input" placeholder="메모를 입력하세요" value={memo} onChange={e => setMemo(e.target.value)} maxLength={100} />
+          </div>
+          <div className="db-modal-footer">
+            <button type="button" className="db-btn-cancel" onClick={onClose}>취소</button>
+            <button type="submit" className="db-btn-save" disabled={loading}>{loading ? '저장 중...' : '만들기'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Dutch Pay View ─────────────────────────────────────────────────
+interface DutchPayViewProps {
+  dutchPays: DutchPay[];
+  isLoading: boolean;
+  onAdd: () => void;
+  onDelete: (id: number) => void;
+  onTogglePaid: (dutchPayId: number, participantId: number) => void;
+  deletingId: number | null;
+  togglingId: number | null;
+  focusId?: number | null;
+}
+
+function DutchPayView({ dutchPays, isLoading, onAdd, onDelete, onTogglePaid, deletingId, togglingId, focusId }: DutchPayViewProps) {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  useEffect(() => {
+    if (focusId == null) return;
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.add(focusId);
+      return next;
+    });
+    setTimeout(() => {
+      document.getElementById(`dutch-item-${focusId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
+  }, [focusId]);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const fmt = (n: number) => n.toLocaleString('ko-KR');
+
+  const toggleExpand = (id: number) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const copyShareText = (dp: DutchPay) => {
+    const perPerson = Math.ceil(dp.totalAmount / dp.participantCount);
+    const lines = [
+      `📊 ${dp.title} 더치페이 정산`,
+      `📅 ${dayjs(dp.date).format('YYYY년 M월 D일')}`,
+      `💰 총액: ${fmt(dp.totalAmount)}원 / 1인당: ${fmt(perPerson)}원`,
+      '',
+      ...dp.participants.map(p =>
+        `${p.isPayer ? '👑' : p.isPaid ? '✅' : '❌'} ${p.name}${p.isPayer ? ' (대표 지출자)' : ''}: ${fmt(p.amountOwed)}원 ${p.isPayer ? '' : p.isPaid ? '(입금 완료)' : '(미정산)'}`
+      ),
+    ];
+    if (dp.memo) lines.splice(3, 0, `📝 ${dp.memo}`);
+    navigator.clipboard.writeText(lines.join('\n'));
+    setCopiedId(dp.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  if (isLoading) return <div className="db-empty">불러오는 중...</div>;
+
+  return (
+    <div className="dutch-section">
+      {dutchPays.length === 0 ? (
+        <div className="db-empty">
+          <div className="db-empty-icon">🤝</div>
+          <p>더치페이 내역이 없어요</p>
+          <p className="db-empty-sub">+ 버튼을 눌러 더치페이를 만들어보세요</p>
+        </div>
+      ) : (
+        dutchPays.map(dp => {
+          const isOpen = expanded.has(dp.id);
+          // 대표 지출자 본인은 "정산" 카운트에서 제외 (본인이 받아야 할 금액 기준)
+          const otherParticipants = dp.participants.filter(p => !p.isPayer);
+          const paidCount = otherParticipants.filter(p => p.isPaid).length;
+          const total = otherParticipants.length;
+          const allPaid = total === 0 || paidCount === total;
+          const unpaidParticipants = otherParticipants.filter(p => !p.isPaid);
+          const perPerson = Math.ceil(dp.totalAmount / dp.participantCount);
+          const payerParticipant = dp.participants.find(p => p.isPayer);
+
+          return (
+            <div key={dp.id} id={`dutch-item-${dp.id}`} className={`dutch-card ${allPaid ? 'dutch-card--done' : ''}`}>
+              {/* 카드 헤더 (요약 정보) */}
+              <div className="dutch-card-header">
+                <div className="dutch-card-left">
+                  <div className="dutch-card-title">
+                    {allPaid ? '✅' : '💸'} {dp.title}
+                    {dp.isUserPayer && (
+                      <span className="dutch-payer-badge">👑 내가 결제</span>
+                    )}
+                  </div>
+                  <div className="dutch-card-meta">
+                    {dayjs(dp.date).format('M월 D일')}
+                    {dp.memo && <span> · {dp.memo}</span>}
+                  </div>
+                </div>
+                <div className="dutch-card-right">
+                  <div className="dutch-amount-info">
+                    <span className="dutch-total">{fmt(dp.totalAmount)}원</span>
+                    <span className="dutch-per-person">1인당 {fmt(perPerson)}원</span>
+                  </div>
+                  <div className={`dutch-progress-badge ${allPaid ? 'done' : ''}`}>
+                    {total === 0 ? '전원 정산' : `${paidCount}/${total} 정산`}
+                  </div>
+                </div>
+              </div>
+
+              {/* 미정산 알림 */}
+              {!allPaid && unpaidParticipants.length > 0 && (
+                <div className="dutch-unpaid-alert">
+                  ⚠️ 미정산: {unpaidParticipants.map(p => p.name).join(', ')}
+                </div>
+              )}
+
+              {/* 펼치기/접기 버튼 */}
+              <button
+                className={`dutch-expand-btn ${isOpen ? 'open' : ''}`}
+                onClick={() => toggleExpand(dp.id)}
+                type="button"
+              >
+                {isOpen ? '접기 ▲' : '상세 보기 ▼'}
+              </button>
+
+              {/* 상세 내용 */}
+              {isOpen && (
+                <div className="dutch-card-body">
+                  <div className="dutch-participants">
+                    {dp.participants.map(p => (
+                      <div key={p.id} className={`dutch-participant-item ${p.isPayer ? 'payer-slot' : p.isPaid ? 'paid' : 'unpaid'}`}>
+                        {p.isPayer ? (
+                          <span className="dutch-payer-crown" title="대표 지출자 (나)">👑</span>
+                        ) : (
+                          <button
+                            className={`dutch-paid-check ${p.isPaid ? 'checked' : ''}`}
+                            onClick={() => onTogglePaid(dp.id, p.id)}
+                            disabled={togglingId === p.id}
+                            title={p.isPaid ? '입금 취소' : '입금 확인'}
+                          >
+                            {togglingId === p.id ? '…' : p.isPaid ? '✓' : '○'}
+                          </button>
+                        )}
+                        <div className="dutch-participant-info">
+                          <span className="dutch-participant-name">
+                            {p.name}
+                            {p.isPayer && <span className="dutch-me-label"> (나)</span>}
+                          </span>
+                          {!p.isPayer && p.isPaid && p.paidAt && (
+                            <span className="dutch-paid-time">{dayjs(p.paidAt).format('M/D HH:mm')} 입금</span>
+                          )}
+                        </div>
+                        <span className={`dutch-participant-amount ${p.isPayer ? 'payer' : p.isPaid ? 'paid' : ''}`}>
+                          {fmt(p.amountOwed)}원
+                          {p.isPayer && <span className="dutch-my-share"> (내 몫)</span>}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 대표 지출자 정산 현황 */}
+                  {dp.isUserPayer && payerParticipant && (
+                    <div className="dutch-settlement-summary">
+                      <div className="dutch-settlement-row">
+                        <span>최초 지출</span>
+                        <span>-{fmt(dp.totalAmount)}원</span>
+                      </div>
+                      <div className="dutch-settlement-row received">
+                        <span>정산 받은 금액</span>
+                        <span>+{fmt(otherParticipants.filter(p => p.isPaid).reduce((s, p) => s + p.amountOwed, 0))}원</span>
+                      </div>
+                      <div className="dutch-settlement-row net">
+                        <span>현재 내 실질 지출</span>
+                        <span>-{fmt(dp.totalAmount - otherParticipants.filter(p => p.isPaid).reduce((s, p) => s + p.amountOwed, 0))}원</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="dutch-card-actions">
+                    <button className="dutch-share-btn" onClick={() => copyShareText(dp)}>
+                      {copiedId === dp.id ? '✓ 복사됨' : '📋 정산 내역 복사'}
+                    </button>
+                    {confirmDeleteId === dp.id ? (
+                      <div className="dutch-delete-confirm">
+                        <span>{dp.isUserPayer ? '거래 내역도 함께 삭제됩니다. 삭제할까요?' : '삭제할까요?'}</span>
+                        <button className="dutch-delete-yes" onClick={() => { onDelete(dp.id); setConfirmDeleteId(null); }} disabled={deletingId === dp.id}>
+                          {deletingId === dp.id ? '삭제 중...' : '삭제'}
+                        </button>
+                        <button className="dutch-delete-no" onClick={() => setConfirmDeleteId(null)}>취소</button>
+                      </div>
+                    ) : (
+                      <button className="dutch-delete-btn" onClick={() => setConfirmDeleteId(dp.id)}>🗑️ 삭제</button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
     </div>
   );
 }
@@ -500,6 +883,12 @@ export default function DashboardPage() {
     new Set(ALL_EXPENSE_CATEGORIES)
   );
   const [showFilter, setShowFilter] = useState(false);
+  const [showDutchModal, setShowDutchModal] = useState(false);
+  const [dutchDeletingId, setDutchDeletingId] = useState<number | null>(null);
+  const [dutchTogglingId, setDutchTogglingId] = useState<number | null>(null);
+  const [fabOpen, setFabOpen] = useState(false);
+  const [fabDefaultType, setFabDefaultType] = useState<'income' | 'expense'>('expense');
+  const [dutchFocusId, setDutchFocusId] = useState<number | null>(null);
 
   const year = currentDate.year();
   const month = currentDate.month() + 1;
@@ -516,6 +905,12 @@ export default function DashboardPage() {
     queryKey: ['transactions', year, month],
     queryFn: () =>
       api.get('/api/transactions', { params: { year, month } }).then(r => r.data),
+    retry: false,
+  });
+
+  const { data: dutchPays = [], isLoading: isDutchLoading } = useQuery<DutchPay[]>({
+    queryKey: ['dutch-pays'],
+    queryFn: () => api.get('/api/dutch-pays').then(r => r.data),
     retry: false,
   });
 
@@ -546,6 +941,45 @@ export default function DashboardPage() {
       setDeleteTarget(null);
     },
   });
+
+  const createDutchMutation = useMutation({
+    mutationFn: (data: { title: string; totalAmount: string; participants: string[]; memo: string; date: string; isUserPayer: boolean; payerIndex: number; category: string }) =>
+      api.post('/api/dutch-pays', { ...data, totalAmount: Number(data.totalAmount) }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dutch-pays'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setShowDutchModal(false);
+    },
+  });
+
+  const deleteDutchMutation = useMutation({
+    mutationFn: (id: number) => api.delete(`/api/dutch-pays/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dutch-pays'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setDutchDeletingId(null);
+    },
+  });
+
+  const togglePaidMutation = useMutation({
+    mutationFn: ({ dutchPayId, participantId }: { dutchPayId: number; participantId: number }) =>
+      api.patch(`/api/dutch-pays/${dutchPayId}/participants/${participantId}/paid`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dutch-pays'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      setDutchTogglingId(null);
+    },
+  });
+
+  const handleDeleteDutch = (id: number) => {
+    setDutchDeletingId(id);
+    deleteDutchMutation.mutate(id);
+  };
+
+  const handleTogglePaid = (dutchPayId: number, participantId: number) => {
+    setDutchTogglingId(participantId);
+    togglePaidMutation.mutate({ dutchPayId, participantId });
+  };
 
   // ── 통계 계산 ──
   const stats = useMemo(() => {
@@ -668,6 +1102,12 @@ export default function DashboardPage() {
             >
               📊 통계
             </button>
+            <button
+              className={`view-toggle-btn${viewMode === 'dutch' ? ' active' : ''}`}
+              onClick={() => setViewMode('dutch')}
+            >
+              🤝 더치페이
+            </button>
           </div>
 
           {/* 카테고리 필터 (리스트 뷰에서만) */}
@@ -711,7 +1151,18 @@ export default function DashboardPage() {
         )}
 
         {/* ── 콘텐츠 영역 ── */}
-        {isLoading ? (
+        {viewMode === 'dutch' ? (
+          <DutchPayView
+            dutchPays={dutchPays}
+            isLoading={isDutchLoading}
+            onAdd={() => setShowDutchModal(true)}
+            onDelete={handleDeleteDutch}
+            onTogglePaid={handleTogglePaid}
+            deletingId={dutchDeletingId}
+            togglingId={dutchTogglingId}
+            focusId={dutchFocusId}
+          />
+        ) : isLoading ? (
           <div className="db-empty">불러오는 중...</div>
         ) : viewMode === 'calendar' ? (
           <CalendarView
@@ -751,19 +1202,39 @@ export default function DashboardPage() {
                   </div>
                   {items.map(t => {
                     const catMeta = getCategoryMeta(t.category, t.type);
+                    const isDutch = t.paymentMethod === '더치페이';
+                    const linkedDutch = isDutch ? dutchPays.find(dp => dp.linkedTransactionId === t.id) : null;
+                    const isSettled = linkedDutch
+                      ? linkedDutch.participants.filter(p => !p.isPayer).every(p => p.isPaid)
+                      : false;
                     return (
-                      <div key={t.id} className="db-tx-card">
-                        <div className="db-tx-icon" style={{ background: catMeta.bg }}>{catMeta.icon}</div>
+                      <div key={t.id} className={`db-tx-card${isDutch ? ' dutch-linked' : ''}`}>
+                        <div className="db-tx-icon" style={{ background: catMeta.bg }}>
+                          {isDutch ? '🤝' : catMeta.icon}
+                        </div>
                         <div className="db-tx-info">
-                          <div className="db-tx-name">{t.memo || t.category}</div>
-                          <div className="db-tx-meta">{t.category} · {t.paymentMethod ?? '카드 결제'}</div>
+                          <div className="db-tx-name">
+                            {t.memo || t.category}
+                            {isDutch && <span className="dutch-tx-badge">더치페이</span>}
+                          </div>
+                          <div className="db-tx-meta">{t.category} · {isDutch ? (isSettled ? '정산 완료' : '정산 중') : (t.paymentMethod ?? '카드 결제')}</div>
                         </div>
                         <div className={`db-tx-amount ${t.type}`}>
                           {t.type === 'expense' ? '-' : '+'}{fmt(t.amount)}원
                         </div>
                         <div className="db-tx-actions">
-                          <button className="db-tx-btn edit" onClick={() => openEdit(t)} title="수정">✏️</button>
-                          <button className="db-tx-btn del" onClick={() => setDeleteTarget(t)} title="삭제">🗑️</button>
+                          {!isDutch && <button className="db-tx-btn edit" onClick={() => openEdit(t)} title="수정">✏️</button>}
+                          {!isDutch && <button className="db-tx-btn del" onClick={() => setDeleteTarget(t)} title="삭제">🗑️</button>}
+                          {isDutch && (
+                            <button
+                              className="db-tx-btn dutch-tx-manage"
+                              title="더치페이 탭에서 관리"
+                              onClick={() => {
+                                setDutchFocusId(linkedDutch?.id ?? null);
+                                setViewMode('dutch');
+                              }}
+                            >🤝</button>
+                          )}
                         </div>
                       </div>
                     );
@@ -775,16 +1246,61 @@ export default function DashboardPage() {
         )}
       </main>
 
-      {/* ── FAB ── */}
-      <button className="db-fab" onClick={openAdd} title="거래 추가">+</button>
+      {/* ── FAB 스피드 다이얼 ── */}
+      {fabOpen && (
+        <div className="fab-backdrop" onClick={() => setFabOpen(false)} />
+      )}
+      <div className="fab-wrap">
+        {fabOpen && (
+          <div className="fab-menu">
+            <button
+              className="fab-item fab-item--dutch"
+              onClick={() => { setFabOpen(false); setShowDutchModal(true); }}
+            >
+              <span className="fab-item-label">더치페이 추가</span>
+              <span className="fab-item-icon">🤝</span>
+            </button>
+            <button
+              className="fab-item fab-item--income"
+              onClick={() => { setFabOpen(false); setFabDefaultType('income'); setEditTarget(null); setShowModal(true); }}
+            >
+              <span className="fab-item-label">수입 추가</span>
+              <span className="fab-item-icon">💰</span>
+            </button>
+            <button
+              className="fab-item fab-item--expense"
+              onClick={() => { setFabOpen(false); setFabDefaultType('expense'); setEditTarget(null); setShowModal(true); }}
+            >
+              <span className="fab-item-label">지출 추가</span>
+              <span className="fab-item-icon">💸</span>
+            </button>
+          </div>
+        )}
+        <button
+          className={`db-fab${fabOpen ? ' fab-open' : ''}`}
+          onClick={() => setFabOpen(v => !v)}
+          title="추가"
+        >
+          <span className="fab-icon">{fabOpen ? '✕' : '+'}</span>
+        </button>
+      </div>
 
       {/* ── Modals ── */}
+      {showDutchModal && (
+        <DutchPayCreateModal
+          onClose={() => setShowDutchModal(false)}
+          onSave={data => createDutchMutation.mutate(data)}
+          loading={createDutchMutation.isPending}
+        />
+      )}
+
       {showModal && (
         <TransactionModal
           target={editTarget}
           onClose={() => { setShowModal(false); setEditTarget(null); }}
           onSave={handleSave}
           loading={isMutating}
+          defaultType={editTarget ? undefined : fabDefaultType}
         />
       )}
 

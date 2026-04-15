@@ -328,30 +328,136 @@
   background: var(--bg);
 }
 
-/* ── FAB ── */
-.db-fab {
+/* ── FAB 스피드 다이얼 ── */
+.fab-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 49;
+}
+
+.fab-wrap {
   position: fixed;
   bottom: 32px;
   right: 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  z-index: 50;
+}
+
+/* 서브 메뉴 아이템 */
+.fab-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.fab-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: none;
+  border-radius: 28px;
+  padding: 0 6px 0 16px;
+  height: 44px;
+  width: 160px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 3px 14px rgba(0,0,0,0.15);
+  transition: transform 0.15s, box-shadow 0.15s;
+  animation: fabItemIn 0.2s ease both;
+  white-space: nowrap;
+}
+.fab-item:hover {
+  transform: scale(1.04) translateX(-2px);
+  box-shadow: 0 5px 18px rgba(0,0,0,0.22);
+}
+
+.fab-item:nth-child(1) { animation-delay: 0.04s; }
+.fab-item:nth-child(2) { animation-delay: 0.02s; }
+.fab-item:nth-child(3) { animation-delay: 0s; }
+
+@keyframes fabItemIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.92); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.fab-item-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.fab-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  background: rgba(255,255,255,0.25);
+  flex-shrink: 0;
+}
+
+.fab-item--expense {
+  background: #FF6B8A;
+  color: #fff;
+}
+.fab-item--income {
+  background: #34C97A;
+  color: #fff;
+}
+.fab-item--dutch {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* 메인 FAB */
+.db-fab {
   width: 56px;
   height: 56px;
   border-radius: 50%;
   background: var(--accent);
   color: #fff;
   border: none;
-  font-size: 28px;
   cursor: pointer;
   box-shadow: 0 4px 20px rgba(170, 59, 255, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.15s, box-shadow 0.15s;
-  z-index: 50;
+  transition: transform 0.22s cubic-bezier(.34,1.56,.64,1), box-shadow 0.15s, background 0.2s;
+  flex-shrink: 0;
+}
+
+.db-fab .fab-icon {
+  font-size: 26px;
+  font-weight: 300;
+  line-height: 1;
+  transition: transform 0.22s cubic-bezier(.34,1.56,.64,1);
+  display: block;
+}
+
+.db-fab.fab-open {
+  background: #555;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+
+.db-fab.fab-open .fab-icon {
+  transform: rotate(0deg);
+  font-size: 20px;
 }
 
 .db-fab:hover {
   transform: scale(1.08);
   box-shadow: 0 6px 28px rgba(170, 59, 255, 0.5);
+}
+.db-fab.fab-open:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 28px rgba(0,0,0,0.3);
 }
 
 /* ── Overlay ── */
@@ -616,7 +722,7 @@
   .db-nav { padding: 12px 16px; }
   .db-nav-logo { display: none; }
   .db-main { padding: 20px 12px 100px; }
-  .db-fab { bottom: 20px; right: 20px; }
+  .fab-wrap { bottom: 20px; right: 20px; }
 }
 
 /* ── View Toggle ── */
@@ -1081,4 +1187,523 @@
   .cal-expense, .cal-income { font-size: 9px; }
   .stats-cat-row { grid-template-columns: 68px 1fr 76px 40px; }
   .stats-cat-amount { font-size: 11px; }
+}
+
+/* ── Dutch Pay ─────────────────────────────────────────────────────── */
+.dutch-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 80px;
+}
+
+.dutch-modal {
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.dutch-participant-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.dutch-add-participant-btn {
+  background: var(--purple);
+  color: var(--purple-t);
+  border: none;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.dutch-add-participant-btn:hover { opacity: 0.8; }
+
+.dutch-participant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dutch-participant-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dutch-participant-input {
+  flex: 1;
+}
+
+.dutch-remove-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 12px;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.dutch-remove-btn:hover { background: var(--pink); color: var(--pink-t); }
+
+.dutch-per-person-preview {
+  margin-top: 10px;
+  padding: 10px 14px;
+  background: var(--purple);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--purple-t);
+  text-align: center;
+}
+.dutch-per-person-preview strong {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+/* ── Dutch Card ── */
+.dutch-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  border: 1.5px solid var(--border);
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.dutch-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+.dutch-card--done { border-color: var(--green-t); opacity: 0.85; }
+
+.dutch-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 16px 18px 14px;
+  cursor: pointer;
+  gap: 12px;
+}
+
+.dutch-card-left { flex: 1; min-width: 0; }
+
+.dutch-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text1);
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dutch-card-meta {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.dutch-card-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.dutch-amount-info {
+  text-align: right;
+}
+
+.dutch-total {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text1);
+  display: block;
+}
+
+.dutch-per-person {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.dutch-progress-badge {
+  background: var(--yellow);
+  color: var(--yellow-t);
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.dutch-progress-badge.done {
+  background: var(--green);
+  color: var(--green-t);
+}
+
+.dutch-expand-icon {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+
+/* ── Unpaid Alert ── */
+.dutch-unpaid-alert {
+  margin: 0 18px 12px;
+  padding: 8px 12px;
+  background: var(--peach);
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--peach-t);
+}
+
+/* ── Card Body ── */
+.dutch-card-body {
+  border-top: 1px solid var(--border);
+  padding: 14px 18px 16px;
+}
+
+.dutch-participants {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.dutch-participant-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  transition: border-color 0.15s, background 0.15s;
+}
+.dutch-participant-item.paid {
+  border-color: var(--green-t);
+  background: var(--green);
+}
+.dutch-participant-item.unpaid {
+  background: var(--surface);
+}
+
+.dutch-paid-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--text3);
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.dutch-paid-check.checked {
+  background: var(--green-t);
+  border-color: var(--green-t);
+  color: white;
+}
+.dutch-paid-check:hover:not(:disabled) { opacity: 0.7; }
+.dutch-paid-check:disabled { cursor: default; opacity: 0.5; }
+
+.dutch-participant-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.dutch-participant-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text1);
+  display: block;
+}
+
+.dutch-paid-time {
+  font-size: 11px;
+  color: var(--green-t);
+}
+
+.dutch-participant-amount {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text2);
+  flex-shrink: 0;
+}
+.dutch-participant-amount.paid { color: var(--green-t); }
+
+/* ── Card Actions ── */
+.dutch-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dutch-share-btn {
+  background: var(--blue);
+  color: var(--blue-t);
+  border: none;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.dutch-share-btn:hover { opacity: 0.8; }
+
+.dutch-delete-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.dutch-delete-btn:hover { background: var(--pink); color: var(--pink-t); border-color: transparent; }
+
+.dutch-delete-confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+}
+
+.dutch-delete-yes {
+  background: #e53e3e;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.dutch-delete-yes:disabled { opacity: 0.6; cursor: default; }
+
+.dutch-delete-no {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text2);
+}
+
+@media (prefers-color-scheme: dark) {
+  .dutch-card { border-color: var(--border); }
+  .dutch-card--done { border-color: var(--green-t); }
+  .dutch-participant-item.paid { background: var(--green); }
+}
+
+@media (max-width: 480px) {
+  .dutch-card-header { padding: 14px 14px 12px; }
+  .dutch-card-body { padding: 12px 14px 14px; }
+  .dutch-card-actions { flex-direction: column; align-items: stretch; }
+  .dutch-share-btn, .dutch-delete-btn { text-align: center; }
+}
+
+/* ── Dutch Pay (추가 스타일) ─────────────────────────────────────── */
+
+/* 펼치기/접기 버튼 */
+.dutch-expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 9px 0;
+  background: var(--bg);
+  border: none;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  gap: 4px;
+  transition: background 0.15s, color 0.15s;
+  letter-spacing: 0.01em;
+}
+.dutch-expand-btn:hover { background: var(--purple); }
+.dutch-expand-btn.open { color: var(--text2); }
+
+/* 대표 지출자 배지 */
+.dutch-payer-badge {
+  display: inline-block;
+  margin-left: 8px;
+  background: var(--yellow);
+  color: var(--yellow-t);
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+/* 대표 지출자 크라운 */
+.dutch-payer-crown {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* 참여자 슬롯 - 대표 지출자 */
+.dutch-participant-item.payer-slot {
+  border-color: var(--yellow-t);
+  background: var(--yellow);
+}
+
+.dutch-me-label {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--yellow-t);
+}
+
+.dutch-participant-amount.payer {
+  color: var(--yellow-t);
+  font-weight: 700;
+}
+
+.dutch-my-share {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--yellow-t);
+  margin-left: 3px;
+}
+
+/* 정산 현황 요약 */
+.dutch-settlement-summary {
+  background: var(--bg);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dutch-settlement-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--text2);
+}
+.dutch-settlement-row.received span:last-child { color: var(--green-t); font-weight: 600; }
+.dutch-settlement-row.net {
+  border-top: 1px solid var(--border);
+  padding-top: 6px;
+  margin-top: 2px;
+  font-weight: 700;
+  color: var(--text1);
+}
+.dutch-settlement-row.net span:last-child { color: var(--pink-t); }
+
+/* 대표 지출자 토글 */
+.dutch-payer-toggle-label {
+  display: flex !important;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text1);
+  font-weight: 500;
+  user-select: none;
+  margin-bottom: 0;
+}
+
+.dutch-payer-toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  min-width: 44px;
+  background: var(--text3);
+  border-radius: 12px;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: background 0.2s;
+  border: none;
+}
+
+.dutch-payer-toggle-text {
+  flex: 1;
+  min-width: 0;
+}
+.dutch-payer-toggle.on { background: var(--accent); }
+
+.dutch-payer-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.dutch-payer-toggle.on .dutch-payer-toggle-knob { transform: translateX(20px); }
+
+.dutch-payer-detail-field {
+  background: var(--purple);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: -4px;
+}
+.dutch-payer-detail-field label { color: var(--purple-t); }
+
+.dutch-payer-info-box {
+  background: var(--blue);
+  color: var(--blue-t);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: -4px;
+  margin-bottom: 4px;
+}
+
+/* ── 더치페이 연동 거래 내역 ── */
+.db-tx-card.dutch-linked {
+  border-left: 3px solid var(--yellow-t);
+}
+
+.dutch-tx-badge {
+  display: inline-block;
+  margin-left: 6px;
+  background: var(--yellow);
+  color: var(--yellow-t);
+  border-radius: 8px;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.dutch-tx-manage {
+  font-size: 16px;
+  opacity: 0.7;
+  cursor: pointer;
+  padding: 4px;
+  background: none;
+  border: none;
+  transition: opacity 0.15s;
+}
+.dutch-tx-manage:hover {
+  opacity: 1;
 }
