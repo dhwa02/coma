@@ -1,6 +1,7 @@
 const DutchPay = require('../models/DutchPay');
 const DutchPayParticipant = require('../models/DutchPayParticipant');
 const Transaction = require('../models/Transaction');
+const User = require('../models/User');
 
 // GET /api/dutch-pays
 exports.getDutchPays = async (req, res) => {
@@ -8,7 +9,11 @@ exports.getDutchPays = async (req, res) => {
   try {
     const dutchPays = await DutchPay.findAll({
       where: { userId },
-      include: [{ model: DutchPayParticipant, as: 'participants', order: [['createdAt', 'ASC']] }],
+      include: [{
+        model: DutchPayParticipant,
+        as: 'participants',
+        include: [{ model: User, as: 'user', attributes: ['id', 'nickname', 'profileImage'] }],
+      }],
       order: [['date', 'DESC'], ['createdAt', 'DESC']],
     });
     res.json(dutchPays);
@@ -60,9 +65,10 @@ exports.createDutchPay = async (req, res) => {
       category: category || null,
     });
 
-    const participantRecords = participants.map((name, i) => ({
+    const participantRecords = participants.map((p, i) => ({
       dutchPayId: dutchPay.id,
-      name,
+      name: typeof p === 'string' ? p : p.name,
+      userId: typeof p === 'string' ? null : (p.userId ?? null),
       amountOwed: amountPerPerson,
       isPaid: false,
       isPayer: i === resolvedPayerIndex,

@@ -127,6 +127,36 @@
   color: var(--text2);
 }
 
+.db-profile-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.db-profile-btn:hover {
+  background: var(--purple);
+  color: var(--accent);
+}
+
+.db-nav-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  transition: background 0.15s;
+  line-height: 1;
+}
+
+.db-nav-icon-btn:hover {
+  background: var(--purple);
+}
+
 .db-logout-btn {
   background: none;
   border: 1px solid var(--border);
@@ -1237,6 +1267,91 @@
 .dutch-participant-input {
   flex: 1;
 }
+
+/* ── 친구 선택 UI ── */
+.dutch-friend-picker-wrap {
+  position: relative;
+}
+
+.dutch-friend-pick-btn {
+  background: var(--purple);
+  border: none;
+  border-radius: 8px;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.dutch-friend-pick-btn:hover { opacity: 0.8; }
+
+.dutch-friend-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  min-width: 140px;
+  overflow: hidden;
+}
+
+.dutch-friend-option {
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text1);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.dutch-friend-option:hover { background: var(--purple); }
+
+.dutch-friend-option-empty {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text3);
+  text-align: center;
+}
+
+.dutch-friend-chip {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--purple);
+  border: 1.5px solid var(--accent);
+  border-radius: 10px;
+  min-height: 40px;
+}
+
+.dutch-friend-chip-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.dutch-friend-chip-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--accent);
+  padding: 0 2px;
+  opacity: 0.7;
+  transition: opacity 0.1s;
+}
+.dutch-friend-chip-remove:hover { opacity: 1; }
 
 .dutch-remove-btn {
   background: none;

@@ -39,10 +39,12 @@ interface DutchPayParticipant {
   id: number;
   dutchPayId: number;
   name: string;
+  userId: number | null;
   amountOwed: number;
   isPaid: boolean;
   paidAt: string | null;
   isPayer: boolean;
+  user?: { id: number; nickname: string; profileImage: string | null } | null;
 }
 
 interface DutchPay {
@@ -218,10 +220,21 @@ function DeleteConfirm({ onCancel, onConfirm, loading }: DeleteConfirmProps) {
 }
 
 // ── Dutch Pay Create Modal ─────────────────────────────────────────
+interface ParticipantEntry {
+  name: string;
+  userId?: number;
+}
+
+interface FriendOption {
+  id: number;
+  nickname: string;
+  profileImage: string | null;
+}
+
 interface DutchPayCreateModalProps {
   onClose: () => void;
   onSave: (data: {
-    title: string; totalAmount: string; participants: string[];
+    title: string; totalAmount: string; participants: ParticipantEntry[];
     memo: string; date: string; isUserPayer: boolean; payerIndex: number; category: string;
   }) => void;
   loading: boolean;
@@ -232,33 +245,44 @@ function DutchPayCreateModal({ onClose, onSave, loading }: DutchPayCreateModalPr
   const [totalAmount, setTotalAmount] = useState('');
   const [memo, setMemo] = useState('');
   const [date, setDate] = useState(dayjs().format('YYYY-MM-DD'));
-  const [participants, setParticipants] = useState<string[]>(['', '']);
+  const [participants, setParticipants] = useState<ParticipantEntry[]>([{ name: '' }, { name: '' }]);
   const [isUserPayer, setIsUserPayer] = useState(false);
   const [payerIndex, setPayerIndex] = useState(0);
   const [category, setCategory] = useState('식비');
+  const [showFriendPicker, setShowFriendPicker] = useState<number | null>(null);
 
-  const validParticipants = participants.map(p => p.trim()).filter(Boolean);
+  const { data: friends = [] } = useQuery<FriendOption[]>({
+    queryKey: ['friends'],
+    queryFn: () => api.get('/api/friends').then(r => r.data),
+    retry: false,
+  });
+
+  const validParticipants = participants.filter(p => p.name.trim());
   const perPerson = totalAmount && validParticipants.length >= 2
     ? Math.ceil(Number(totalAmount) / validParticipants.length)
     : 0;
 
-  const addParticipant = () => setParticipants(prev => [...prev, '']);
+  const addParticipant = () => setParticipants(prev => [...prev, { name: '' }]);
   const removeParticipant = (i: number) => {
     setParticipants(prev => prev.filter((_, idx) => idx !== i));
     if (payerIndex >= i && payerIndex > 0) setPayerIndex(p => p - 1);
   };
-  const updateParticipant = (i: number, val: string) =>
-    setParticipants(prev => prev.map((p, idx) => idx === i ? val : p));
+  const updateParticipantName = (i: number, name: string) =>
+    setParticipants(prev => prev.map((p, idx) => idx === i ? { ...p, name, userId: undefined } : p));
+  const selectFriend = (i: number, friend: FriendOption) => {
+    setParticipants(prev => prev.map((p, idx) => idx === i ? { name: friend.nickname, userId: friend.id } : p));
+    setShowFriendPicker(null);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const valid = participants.map(p => p.trim()).filter(Boolean);
+    const valid = participants.filter(p => p.name.trim()).map(p => ({ ...p, name: p.name.trim() }));
     if (!title.trim() || !totalAmount || Number(totalAmount) <= 0 || valid.length < 2) return;
     onSave({ title: title.trim(), totalAmount, participants: valid, memo: memo.trim(), date, isUserPayer, payerIndex, category });
   };
 
-  // payerIndex를 실제 입력된 참여자 인덱스로 매핑 (빈 칸 건너뜀)
-  const filledIndices = participants.map((p, i) => ({ raw: i, val: p.trim() })).filter(x => x.val);
+  const filledIndices = participants.map((p, i) => ({ raw: i, val: p.name.trim() })).filter(x => x.val);
+  const usedFriendIds = new Set(participants.filter(p => p.userId).map(p => p.userId!));
 
   return (
     <div className="db-overlay" onClick={onClose}>
@@ -293,13 +317,56 @@ function DutchPayCreateModal({ onClose, onSave, loading }: DutchPayCreateModalPr
             <div className="dutch-participant-list">
               {participants.map((p, i) => (
                 <div key={i} className="dutch-participant-row">
-                  <input
-                    className="db-input dutch-participant-input"
-                    placeholder={`참여자 ${i + 1}`}
-                    value={p}
-                    onChange={e => updateParticipant(i, e.target.value)}
-                    maxLength={20}
-                  />
+                  {p.userId ? (
+                    <div className="dutch-friend-chip">
+                      <span className="dutch-friend-chip-name">{p.name}</span>
+                      <button
+                        type="button"
+                        className="dutch-friend-chip-remove"
+                        onClick={() => updateParticipantName(i, '')}
+                      >✕</button>
+                    </div>
+                  ) : (
+                    <input
+                      className="db-input dutch-participant-input"
+                      placeholder={`참여자 ${i + 1}`}
+                      value={p.name}
+                      onChange={e => updateParticipantName(i, e.target.value)}
+                      maxLength={20}
+                    />
+                  )}
+                  {!p.userId && (
+                    <div className="dutch-friend-picker-wrap">
+                      <button
+                        type="button"
+                        className="dutch-friend-pick-btn"
+                        onClick={() => setShowFriendPicker(showFriendPicker === i ? null : i)}
+                        title="친구에서 선택"
+                      >
+                        👥
+                      </button>
+                      {showFriendPicker === i && (
+                        <div className="dutch-friend-dropdown">
+                          {friends
+                            .filter(f => !usedFriendIds.has(f.id))
+                            .map(f => (
+                              <button
+                                key={f.id}
+                                type="button"
+                                className="dutch-friend-option"
+                                onClick={() => selectFriend(i, f)}
+                              >
+                                {f.nickname}
+                              </button>
+                            ))
+                          }
+                          {friends.filter(f => !usedFriendIds.has(f.id)).length === 0 && (
+                            <div className="dutch-friend-option-empty">선택 가능한 친구가 없어요</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {participants.length > 2 && (
                     <button type="button" className="dutch-remove-btn" onClick={() => removeParticipant(i)}>✕</button>
                   )}
@@ -315,10 +382,7 @@ function DutchPayCreateModal({ onClose, onSave, loading }: DutchPayCreateModalPr
 
           {/* 대표 지출자 토글 */}
           <div className="db-field">
-            <label
-              className="dutch-payer-toggle-label"
-              onClick={() => setIsUserPayer(v => !v)}
-            >
+            <label className="dutch-payer-toggle-label" onClick={() => setIsUserPayer(v => !v)}>
               <span className={`dutch-payer-toggle ${isUserPayer ? 'on' : ''}`}>
                 <span className="dutch-payer-toggle-knob" />
               </span>
@@ -330,11 +394,7 @@ function DutchPayCreateModal({ onClose, onSave, loading }: DutchPayCreateModalPr
             <>
               <div className="db-field dutch-payer-detail-field">
                 <label>참여자 목록에서 내 이름 선택</label>
-                <select
-                  className="db-input db-select"
-                  value={payerIndex}
-                  onChange={e => setPayerIndex(Number(e.target.value))}
-                >
+                <select className="db-input db-select" value={payerIndex} onChange={e => setPayerIndex(Number(e.target.value))}>
                   {filledIndices.map(({ raw, val }) => (
                     <option key={raw} value={raw}>{val}</option>
                   ))}
@@ -943,7 +1003,7 @@ export default function DashboardPage() {
   });
 
   const createDutchMutation = useMutation({
-    mutationFn: (data: { title: string; totalAmount: string; participants: string[]; memo: string; date: string; isUserPayer: boolean; payerIndex: number; category: string }) =>
+    mutationFn: (data: { title: string; totalAmount: string; participants: ParticipantEntry[]; memo: string; date: string; isUserPayer: boolean; payerIndex: number; category: string }) =>
       api.post('/api/dutch-pays', { ...data, totalAmount: Number(data.totalAmount) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['dutch-pays'] });
@@ -1059,7 +1119,17 @@ export default function DashboardPage() {
           >›</button>
         </div>
         <div className="db-nav-right">
-          {user && <span className="db-user-name">{user.nickname}</span>}
+          <button className="db-nav-icon-btn" onClick={() => navigate('/groups')} title="절약 대결">
+            🏆
+          </button>
+          <button className="db-nav-icon-btn" onClick={() => navigate('/friends')} title="친구">
+            👥
+          </button>
+          {user && (
+            <button className="db-user-name db-profile-btn" onClick={() => navigate('/profile')}>
+              {user.nickname}
+            </button>
+          )}
           <button className="db-logout-btn" onClick={handleLogout}>로그아웃</button>
         </div>
       </nav>

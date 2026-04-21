@@ -1,6 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 const DutchPay = require('./DutchPay');
+const User = require('./User');
 
 const DutchPayParticipant = sequelize.define('DutchPayParticipant', {
   id: {
@@ -11,6 +12,10 @@ const DutchPayParticipant = sequelize.define('DutchPayParticipant', {
   dutchPayId: {
     type: DataTypes.INTEGER,
     allowNull: false,
+  },
+  userId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
   },
   name: {
     type: DataTypes.STRING,
@@ -29,7 +34,6 @@ const DutchPayParticipant = sequelize.define('DutchPayParticipant', {
     type: DataTypes.DATE,
     allowNull: true,
   },
-  // 대표 지출자 여부 (본인 참여자 슬롯)
   isPayer: {
     type: DataTypes.BOOLEAN,
     allowNull: false,
@@ -42,5 +46,6 @@ const DutchPayParticipant = sequelize.define('DutchPayParticipant', {
 
 DutchPay.hasMany(DutchPayParticipant, { foreignKey: 'dutchPayId', as: 'participants', onDelete: 'CASCADE' });
 DutchPayParticipant.belongsTo(DutchPay, { foreignKey: 'dutchPayId' });
+DutchPayParticipant.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 module.exports = DutchPayParticipant;

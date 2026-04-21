@@ -1,0 +1,268 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+.profile-wrap {
+  font-family: 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif;
+  background: var(--bg);
+  min-height: 100vh;
+  color: var(--text1);
+}
+
+/* ── Nav ── */
+.profile-nav {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 56px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.profile-nav-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text1);
+}
+
+.profile-back-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--accent);
+  padding: 6px 0;
+  width: 80px;
+  text-align: left;
+}
+
+.profile-back-btn:hover {
+  opacity: 0.75;
+}
+
+/* ── Main ── */
+.profile-main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 32px 16px 48px;
+}
+
+/* ── Card ── */
+.profile-card {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ── Avatar ── */
+.profile-avatar-wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.profile-avatar-img {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--border);
+}
+
+.profile-avatar-placeholder {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background: var(--purple);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+/* ── Section ── */
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.profile-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text1);
+}
+
+.profile-value.muted {
+  font-weight: 400;
+  color: var(--text2);
+}
+
+.profile-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.profile-edit-btn {
+  background: var(--purple);
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 6px 14px;
+  border-radius: 8px;
+  transition: opacity 0.15s;
+}
+
+.profile-edit-btn:hover {
+  opacity: 0.8;
+}
+
+/* ── Edit Form ── */
+.profile-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profile-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text1);
+  background: var(--bg);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.profile-input:focus {
+  border-color: var(--accent);
+}
+
+.profile-input-hint {
+  font-size: 12px;
+  color: var(--text3);
+  text-align: right;
+}
+
+.profile-edit-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.profile-btn-cancel {
+  flex: 1;
+  padding: 10px;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+}
+
+.profile-btn-cancel:hover {
+  background: var(--bg);
+}
+
+.profile-btn-save {
+  flex: 2;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+
+.profile-btn-save:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-btn-save:not(:disabled):hover {
+  opacity: 0.88;
+}
+
+/* ── Messages ── */
+.profile-error {
+  font-size: 13px;
+  color: #e53e3e;
+  padding: 6px 10px;
+  background: rgba(229, 62, 62, 0.08);
+  border-radius: 7px;
+}
+
+.profile-success {
+  font-size: 13px;
+  color: #2e8b57;
+  padding: 6px 10px;
+  background: var(--green);
+  border-radius: 7px;
+}
+
+/* ── Social Badge ── */
+.profile-social-list {
+  display: flex;
+  gap: 8px;
+}
+
+.profile-social-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
+}
+
+.profile-social-badge.kakao {
+  background: #FEE500;
+  color: #3C1E1E;
+}
+
+/* ── Guide ── */
+.profile-guide {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text3);
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ── Loading ── */
+.profile-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  font-size: 15px;
+  color: var(--text2);
+}
