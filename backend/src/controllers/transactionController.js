@@ -28,7 +28,7 @@ exports.getTransactions = async (req, res) => {
 
 // POST /api/transactions
 exports.createTransaction = async (req, res) => {
-  const { type, amount, category, memo, date, paymentMethod } = req.body;
+  const { type, amount, category, memo, date, paymentMethod, excludedGroupIds } = req.body;
   const userId = req.user.id;
 
   if (!type || !amount || !category || !date) {
@@ -44,6 +44,7 @@ exports.createTransaction = async (req, res) => {
       memo: memo || null,
       date,
       paymentMethod: paymentMethod || '카드 결제',
+      excludedGroupIds: Array.isArray(excludedGroupIds) && excludedGroupIds.length > 0 ? excludedGroupIds : null,
     });
     res.status(201).json(transaction);
   } catch (err) {
@@ -56,7 +57,7 @@ exports.createTransaction = async (req, res) => {
 exports.updateTransaction = async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
-  const { type, amount, category, memo, date, paymentMethod } = req.body;
+  const { type, amount, category, memo, date, paymentMethod, excludedGroupIds } = req.body;
 
   try {
     const transaction = await Transaction.findOne({ where: { id, userId } });
@@ -71,6 +72,7 @@ exports.updateTransaction = async (req, res) => {
       memo: memo || null,
       date,
       paymentMethod: paymentMethod || '카드 결제',
+      excludedGroupIds: Array.isArray(excludedGroupIds) && excludedGroupIds.length > 0 ? excludedGroupIds : null,
     });
 
     res.json(transaction);

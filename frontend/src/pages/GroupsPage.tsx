@@ -25,6 +25,7 @@ interface Group {
   startDate: string;
   endDate: string;
   goal: number | null;
+  categories: string[] | null;
   owner: UserInfo;
   members: GroupMemberDetail[];
   myRole: 'owner' | 'member';
@@ -71,11 +72,22 @@ function isActive(startDate: string, endDate: string) {
   return startDate <= now && now <= endDate;
 }
 
-// ── 그룹 생성 모달 ──────────────────────────────────────────────────
+const EXPENSE_CATEGORIES = [
+  { name: '식비', icon: '🍱' },
+  { name: '교통', icon: '🚌' },
+  { name: '카페', icon: '☕' },
+  { name: '쇼핑', icon: '🛍️' },
+  { name: '의료', icon: '💊' },
+  { name: '문화', icon: '🎬' },
+  { name: '주거', icon: '🏠' },
+  { name: '기타', icon: '📦' },
+];
+
+// ── 챌린지 생성 모달 ──────────────────────────────────────────────────
 interface CreateModalProps {
   friends: Friend[];
   onClose: () => void;
-  onSave: (data: { name: string; startDate: string; endDate: string; goal: string; inviteeIds: number[] }) => void;
+  onSave: (data: { name: string; startDate: string; endDate: string; goal: string; inviteeIds: number[]; categories: string[] | null }) => void;
   loading: boolean;
 }
 
@@ -86,6 +98,8 @@ function CreateGroupModal({ friends, onClose, onSave, loading }: CreateModalProp
   const [endDate, setEndDate] = useState('');
   const [goal, setGoal] = useState('');
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [allCategories, setAllCategories] = useState(true);
+  const [selectedCats, setSelectedCats] = useState<Set<string>>(new Set());
 
   const toggleFriend = (id: number) => {
     setSelected(prev => {
@@ -95,22 +109,31 @@ function CreateGroupModal({ friends, onClose, onSave, loading }: CreateModalProp
     });
   };
 
+  const toggleCat = (name: string) => {
+    setSelectedCats(prev => {
+      const next = new Set(prev);
+      next.has(name) ? next.delete(name) : next.add(name);
+      return next;
+    });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !startDate || !endDate) return;
-    onSave({ name: name.trim(), startDate, endDate, goal, inviteeIds: [...selected] });
+    const categories = allCategories ? null : [...selectedCats];
+    onSave({ name: name.trim(), startDate, endDate, goal, inviteeIds: [...selected], categories });
   };
 
   return (
     <div className="gr-overlay" onClick={onClose}>
       <div className="gr-modal" onClick={e => e.stopPropagation()}>
         <div className="gr-modal-header">
-          <h3>절약 대결 그룹 만들기</h3>
+          <h3>절약 대결 챌린지 만들기</h3>
           <button className="gr-modal-close" onClick={onClose}>✕</button>
         </div>
         <form onSubmit={handleSubmit} className="gr-modal-body">
           <div className="gr-field">
-            <label>그룹 이름</label>
+            <label>챌린지 이름</label>
             <input className="gr-input" placeholder="예) 6월 절약 대결" value={name} onChange={e => setName(e.target.value)} maxLength={30} required />
           </div>
           <div className="gr-field gr-field-row">
@@ -132,6 +155,28 @@ function CreateGroupModal({ friends, onClose, onSave, loading }: CreateModalProp
             <p className="gr-hint">이 금액 이하로 지출하는 것이 목표예요</p>
           </div>
           <div className="gr-field">
+            <label>챌린지 카테고리 <span className="gr-optional">(선택)</span></label>
+            <label className="gr-all-cat-toggle">
+              <input type="checkbox" checked={allCategories} onChange={e => { setAllCategories(e.target.checked); if (e.target.checked) setSelectedCats(new Set()); }} />
+              <span>전체 카테고리 포함</span>
+            </label>
+            {!allCategories && (
+              <div className="gr-cat-grid">
+                {EXPENSE_CATEGORIES.map(c => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    className={`gr-cat-chip${selectedCats.has(c.name) ? ' selected' : ''}`}
+                    onClick={() => toggleCat(c.name)}
+                  >
+                    {c.icon} {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="gr-hint">선택한 카테고리의 지출만 챌린지 순위에 반영돼요</p>
+          </div>
+          <div className="gr-field">
             <label>친구 초대 <span className="gr-optional">(선택)</span></label>
             {friends.length === 0 ? (
               <p className="gr-hint">친구를 추가하면 여기서 초대할 수 있어요</p>
@@ -150,7 +195,7 @@ function CreateGroupModal({ friends, onClose, onSave, loading }: CreateModalProp
           <div className="gr-modal-footer">
             <button type="button" className="gr-btn-cancel" onClick={onClose}>취소</button>
             <button type="submit" className="gr-btn-save" disabled={loading || !name.trim() || !endDate}>
-              {loading ? '생성 중...' : '그룹 만들기'}
+              {loading ? '생성 중...' : '챌린지 만들기'}
             </button>
           </div>
         </form>
@@ -159,7 +204,7 @@ function CreateGroupModal({ friends, onClose, onSave, loading }: CreateModalProp
   );
 }
 
-// ── 그룹 상세 모달 ──────────────────────────────────────────────────
+// ── 챌린지 상세 모달 ──────────────────────────────────────────────────
 interface DetailModalProps {
   groupId: number;
   onClose: () => void;
@@ -216,10 +261,15 @@ function GroupDetailModal({ groupId, onClose, onDelete, onLeave, friends }: Deta
         </div>
 
         <div className="gr-modal-body">
-          {/* 기간 & 목표 */}
+          {/* 기간 & 목표 & 카테고리 */}
           <div className="gr-detail-meta">
             <span>📅 {formatDate(group.startDate)} ~ {formatDate(group.endDate)}</span>
             {group.goal && <span>🎯 목표 {fmt(group.goal)}원 이하</span>}
+            <span>
+              📊 {group.categories && group.categories.length > 0
+                ? group.categories.join(' · ')
+                : '전체 카테고리'}
+            </span>
           </div>
 
           {/* 랭킹 */}
@@ -299,11 +349,11 @@ function GroupDetailModal({ groupId, onClose, onDelete, onLeave, friends }: Deta
           <div className="gr-detail-actions">
             {group.myRole === 'owner' ? (
               <button className="gr-btn-danger" onClick={() => { onDelete(group.id); onClose(); }}>
-                그룹 삭제
+                챌린지 삭제
               </button>
             ) : (
               <button className="gr-btn-danger" onClick={() => { onLeave(group.id); onClose(); }}>
-                그룹 탈퇴
+                챌린지 탈퇴
               </button>
             )}
           </div>
@@ -337,7 +387,7 @@ export default function GroupsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; startDate: string; endDate: string; goal: string; inviteeIds: number[] }) =>
+    mutationFn: (data: { name: string; startDate: string; endDate: string; goal: string; inviteeIds: number[]; categories: string[] | null }) =>
       api.post('/api/groups', { ...data, goal: data.goal ? Number(data.goal) : null }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['groups'] });
@@ -380,7 +430,7 @@ export default function GroupsPage() {
         {/* 탭 */}
         <div className="gr-tabs">
           <button className={`gr-tab${tab === 'groups' ? ' active' : ''}`} onClick={() => setTab('groups')}>
-            내 그룹
+            내 챌린지
             {groups.length > 0 && <span className="gr-tab-count">{groups.length}</span>}
           </button>
           <button className={`gr-tab${tab === 'invites' ? ' active' : ''}`} onClick={() => setTab('invites')}>
@@ -389,18 +439,18 @@ export default function GroupsPage() {
           </button>
         </div>
 
-        {/* 내 그룹 목록 */}
+        {/* 내 챌린지 목록 */}
         {tab === 'groups' && (
           <>
             <button className="gr-create-btn" onClick={() => setShowCreate(true)}>
-              + 새 그룹 만들기
+              + 새 챌린지 만들기
             </button>
             {loadingGroups ? (
               <div className="gr-empty">불러오는 중...</div>
             ) : groups.length === 0 ? (
               <div className="gr-empty">
                 <div className="gr-empty-icon">🏆</div>
-                <p>참여 중인 그룹이 없어요</p>
+                <p>참여 중인 챌린지가 없어요</p>
                 <p className="gr-empty-sub">친구와 절약 대결을 시작해보세요</p>
               </div>
             ) : (
@@ -446,7 +496,7 @@ export default function GroupsPage() {
             ) : invites.length === 0 ? (
               <div className="gr-empty">
                 <div className="gr-empty-icon">📭</div>
-                <p>받은 그룹 초대가 없어요</p>
+                <p>받은 챌린지 초대가 없어요</p>
               </div>
             ) : (
               invites.map(inv => (

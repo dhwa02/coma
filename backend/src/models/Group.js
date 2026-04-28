@@ -29,6 +29,11 @@ const Group = sequelize.define('Group', {
     type: DataTypes.DATEONLY,
     allowNull: false,
   },
+  categories: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    comment: '챌린지 대상 카테고리 배열 (NULL = 전체)',
+  },
 }, {
   tableName: 'groups',
   timestamps: true,

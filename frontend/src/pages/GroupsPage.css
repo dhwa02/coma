@@ -195,7 +195,27 @@
   font-size: 13px; color: var(--text2);
 }
 
-.gr-hint { font-size: 12px; color: var(--text3); }
+.gr-hint { font-size: 12px; color: var(--text3); margin-top: 6px; }
+
+/* ── Category Selection ── */
+.gr-all-cat-toggle {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 500; color: var(--text2);
+  cursor: pointer; margin-bottom: 8px;
+}
+.gr-cat-grid {
+  display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 4px;
+}
+.gr-cat-chip {
+  padding: 5px 12px; border-radius: 20px;
+  border: 1.5px solid var(--border); background: var(--bg);
+  font-size: 13px; font-weight: 500; color: var(--text2);
+  cursor: pointer; font-family: inherit;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+.gr-cat-chip.selected {
+  border-color: var(--accent); background: var(--purple); color: var(--accent);
+}
 
 /* ── Friend Chips ── */
 .gr-friend-list { display: flex; flex-wrap: wrap; gap: 8px; }

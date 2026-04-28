@@ -12,15 +12,17 @@ const USER_ATTRS = ['id', 'nickname', 'profileImage'];
 exports.createGroup = async (req, res) => {
   const t = await sequelize.transaction();
   try {
-    const { name, startDate, endDate, goal, inviteeIds = [] } = req.body;
+    const { name, startDate, endDate, goal, inviteeIds = [], categories } = req.body;
     const ownerId = req.user.id;
 
     if (!name?.trim()) return res.status(400).json({ message: '그룹 이름을 입력해주세요.' });
     if (!startDate || !endDate) return res.status(400).json({ message: '기간을 입력해주세요.' });
     if (startDate > endDate) return res.status(400).json({ message: '종료일이 시작일보다 앞설 수 없습니다.' });
 
+    const categoryValue = Array.isArray(categories) && categories.length > 0 ? categories : null;
+
     const group = await Group.create(
-      { name: name.trim(), ownerId, startDate, endDate, goal: goal || null },
+      { name: name.trim(), ownerId, startDate, endDate, goal: goal || null, categories: categoryValue },
       { transaction: t }
     );
 
@@ -136,15 +138,22 @@ exports.getGroupDetail = async (req, res) => {
     const isMember = group.members.some(m => m.userId === userId);
     if (!isMember) return res.status(403).json({ message: '그룹 멤버가 아닙니다.' });
 
-    // 각 멤버의 기간 내 지출 합계 조회
+    // 각 멤버의 기간 내 지출 합계 조회 (챌린지 제외 내역 및 카테고리 필터 적용)
     const memberIds = group.members.map(m => m.userId);
+    const spendingWhere = {
+      userId: { [Op.in]: memberIds },
+      type: 'expense',
+      date: { [Op.between]: [group.startDate, group.endDate] },
+      [Op.and]: [
+        literal(`(excludedGroupIds IS NULL OR NOT JSON_CONTAINS(excludedGroupIds, CAST(${group.id} AS JSON)))`),
+      ],
+    };
+    if (group.categories && group.categories.length > 0) {
+      spendingWhere.category = { [Op.in]: group.categories };
+    }
     const spendingRows = await Transaction.findAll({
       attributes: ['userId', [fn('SUM', col('amount')), 'total']],
-      where: {
-        userId: { [Op.in]: memberIds },
-        type: 'expense',
-        date: { [Op.between]: [group.startDate, group.endDate] },
-      },
+      where: spendingWhere,
       group: ['userId'],
       raw: true,
     });

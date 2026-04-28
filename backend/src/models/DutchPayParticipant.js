@@ -39,6 +39,11 @@ const DutchPayParticipant = sequelize.define('DutchPayParticipant', {
     allowNull: false,
     defaultValue: false,
   },
+  linkedTransactionId: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: null,
+  },
 }, {
   tableName: 'dutch_pay_participants',
   timestamps: true,

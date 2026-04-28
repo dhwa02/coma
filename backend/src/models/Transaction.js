@@ -37,6 +37,12 @@ const Transaction = sequelize.define('Transaction', {
     allowNull: true,
     defaultValue: '카드 결제',
   },
+  excludedGroupIds: {
+    type: DataTypes.JSON,
+    allowNull: true,
+    defaultValue: null,
+    comment: '챌린지에서 제외된 그룹 ID 배열 (NULL = 전체 포함)',
+  },
 }, {
   tableName: 'transactions',
   timestamps: true,

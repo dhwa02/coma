@@ -575,6 +575,32 @@
   color: var(--text3);
 }
 
+.db-field-label {
+  font-size: 13px; font-weight: 600; color: var(--text2);
+  display: block; margin-bottom: 8px;
+}
+
+.db-challenge-list {
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+.db-challenge-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--bg);
+  font-size: 13px; font-weight: 500; color: var(--text2);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.db-challenge-item.included {
+  border-color: var(--accent); background: var(--purple); color: var(--accent);
+}
+
+.db-hint {
+  font-size: 12px; color: var(--text3); margin-top: 4px;
+}
+
 .db-input {
   width: 100%;
   border: 1px solid var(--border);
@@ -1370,6 +1396,48 @@
 }
 .dutch-friend-chip-remove:hover { opacity: 1; }
 
+.dutch-me-chip {
+  background: #EDE0FF;
+  border-color: #9B6FD8;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.dutch-me-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: #9B6FD8;
+  border-radius: 6px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+
+.dutch-payer-crown-btn {
+  background: none;
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.35;
+  transition: opacity 0.15s, border-color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.dutch-payer-crown-btn:hover { opacity: 0.7; }
+.dutch-payer-crown-btn.active {
+  opacity: 1;
+  border-color: #F59E0B;
+  background: #FFFBEB;
+}
+
+.dutch-paid-check.static {
+  cursor: default;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .dutch-remove-btn {
   background: none;
   border: 1px solid var(--border);
@@ -1813,6 +1881,10 @@
 /* ── 더치페이 연동 거래 내역 ── */
 .db-tx-card.dutch-linked {
   border-left: 3px solid var(--yellow-t);
+}
+
+.db-tx-amount.needs-settlement {
+  color: #e07a00;
 }
 
 .dutch-tx-badge {

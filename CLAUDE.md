@@ -18,18 +18,34 @@
 - 네이버 소셜 로그인 (`GET /api/auth/naver` → `POST /api/auth/naver/token`)
 - JWT accessToken + refreshToken 쿠키 발급
 - `GET /api/auth/me` - 현재 로그인 유저 조회
+- **임시 개발용 계정 로그인** (`POST /api/auth/dev-login`) - `findOrCreate`로 중복 생성 방지
 
 ### 거래 내역 (Transactions)
 - 수입/지출 CRUD
 - 카테고리별 분류
 - 날짜별 조회 및 달력 표시
+- **챌린지 포함/제외 설정**: `excludedGroupIds` JSON 배열로 그룹별 제외 여부 관리 (기본값 null = 모든 챌린지 포함)
+- 지출 추가/수정 모달에서 진행 중인 챌린지별 포함 여부 체크박스 제공
 
 ### 더치페이 (DutchPay)
-- 더치페이 생성 (제목, 총액, 참여자 이름 직접 입력)
+- 더치페이 생성 (제목, 총액, 참여자 이름 직접 입력 또는 친구 선택)
 - 참여자별 정산 금액 자동 계산 (`Math.ceil(totalAmount / count)`)
-- 대표 지출자 지정 시 Transaction 자동 연동
-- 참여자별 입금 완료 체크
+- **대표 지출자**: 참여자 목록에서 왕관(👑) 버튼으로 선택 (기본: 첫 번째 = 나)
+- **전원 트랜잭션 자동 생성**: 대표 지출자(totalAmount) + 비지출자 참여자(amountOwed) 모두 거래 내역 자동 등록
+- **친구도 본인 더치페이 조회 가능**: `DutchPayParticipant.userId` 기준으로 본인이 참여자인 더치페이 모두 표시
+- 참여자별 입금 완료 체크 (생성자 또는 해당 참여자 본인만 가능)
 - 정산 내용 클립보드 공유
+- **카드 전체 클릭으로 펼치기/접기** (상세 보기 버튼과 병행)
+
+### 그룹 챌린지
+- 그룹 생성/초대/수락/거절/탈퇴/삭제
+- **지출 카테고리 지정**: 그룹 생성 시 대상 카테고리 선택 가능 (null = 전체)
+- 그룹별 기간 내 지출 합산 및 멤버 랭킹
+- `JSON_CONTAINS`로 `excludedGroupIds` 필터 적용한 정확한 지출 집계
+
+### 알림 뱃지
+- 친구 요청 대기 중이면 👥 아이콘에 빨간 뱃지 표시 (30초 폴링)
+- 그룹 초대 대기 중이면 🏆 아이콘에 빨간 뱃지 표시 (30초 폴링)
 
 ---
 
@@ -43,287 +59,115 @@ id, kakaoId, naverId, email, nickname, profileImage, createdAt, updatedAt
 
 ### Transaction (`transactions` 테이블)
 ```
-id, userId, type(income/expense), amount, category, memo, date, createdAt, updatedAt
+id, userId, type(income/expense), amount, category, memo, date,
+paymentMethod, excludedGroupIds(JSON), createdAt, updatedAt
 ```
+- `excludedGroupIds`: 제외할 그룹 ID 배열. NULL이면 모든 챌린지에 포함
 
 ### DutchPay (`dutch_pays` 테이블)
 ```
 id, userId, title, totalAmount, participantCount, memo, date,
 isUserPayer, linkedTransactionId, category, createdAt, updatedAt
 ```
+- `linkedTransactionId`: 대표 지출자의 거래 내역 ID
 
 ### DutchPayParticipant (`dutch_pay_participants` 테이블)
 ```
-id, dutchPayId, name(문자열), amountOwed, isPaid, paidAt, isPayer, createdAt, updatedAt
+id, dutchPayId, userId(FK nullable), name, amountOwed, isPaid, paidAt,
+isPayer, linkedTransactionId, createdAt, updatedAt
 ```
-- 현재 참여자는 이름 문자열로만 저장 (User FK 없음)
+- `userId`: 친구 연동 시 User FK 저장 (없으면 NULL)
+- `linkedTransactionId`: 해당 참여자의 거래 내역 ID (비지출자도 포함)
 
----
+### Group (`groups` 테이블)
+```
+id, name, ownerId, startDate, endDate, goal, categories(JSON), createdAt, updatedAt
+```
+- `categories`: 대상 카테고리 배열. NULL이면 전체 카테고리
 
-## 진행 예정 작업: 친구 초대 및 그룹 생성 기능
+### GroupMember (`group_members` 테이블)
+```
+id, groupId, userId, role(owner/member), status(pending/accepted), createdAt, updatedAt
+```
 
-### 구현 방식 결정사항
-- 친구 검색: **닉네임 기반 앱 내 사용자 검색** (웹 자체 시스템)
-- 친구 초대: **카카오 공유하기 JavaScript SDK** (비즈니스 심사 불필요, 팝업 방식)
-- 카카오 친구 목록 불러오기: 미구현 (비즈니스 심사 필요하여 제외)
-
--------------------
--------------------
-
-## 단계별 구현 계획
-
-### 1단계: 프로필 페이지 + 닉네임 설정 (완료)
-
-**목표**: 사용자가 닉네임을 직접 변경할 수 있도록 하고, 친구 검색의 기반 마련
-
-**백엔드**
-- [x] `PATCH /api/users/profile` - 닉네임, 프로필이미지 수정 API (중복 닉네임 검사 포함)
-- [x] `GET /api/users/search?q=닉네임` - 닉네임으로 사용자 검색 API (2자 이상, 자신 제외)
-- [x] 라우터: `/backend/src/routes/users.js` 신규 생성
-- [x] 컨트롤러: `/backend/src/controllers/userController.js` 신규 생성
-- [x] `index.js`에 `/api/users` 라우트 등록
-
-**프론트엔드**
-- [x] 프로필 페이지 신규 생성 (`/frontend/src/pages/ProfilePage.tsx`)
-  - 닉네임 변경 폼 (실시간 글자수, 중복 오류 표시)
-  - 카카오 프로필 이미지 표시 (없으면 이니셜 아바타)
-  - 이메일/소셜 계정 정보 표시
-- [x] `App.tsx`에 `/profile` 라우트 추가
-- [x] 대시보드 Nav의 닉네임을 클릭하면 프로필 페이지로 이동 (`.db-profile-btn`)
-
----
-
-### 2단계: 친구 시스템 (완료)
-
-**목표**: 닉네임으로 친구를 검색하고 친구 요청/수락/거절 구현
-
-**백엔드**
-- [x] Friend 모델 신규 생성 (`/backend/src/models/Friend.js`)
-  - `id, requesterId, receiverId, status(pending/accepted/rejected), createdAt, updatedAt`
-  - User와 양방향 association (requester/receiver alias)
-- [x] `POST /api/friends/request` - 친구 요청 (중복/이미 친구 검사, 거절 후 재요청 가능)
-- [x] `PATCH /api/friends/:id/accept` - 친구 요청 수락
-- [x] `PATCH /api/friends/:id/reject` - 친구 요청 거절
-- [x] `DELETE /api/friends/:id` - 친구 삭제
-- [x] `GET /api/friends` - 내 친구 목록 (requesterId/receiverId 양방향 조회)
-- [x] `GET /api/friends/requests` - 받은 친구 요청 목록
-- [x] 라우터: `/backend/src/routes/friends.js` 신규 생성
-- [x] 컨트롤러: `/backend/src/controllers/friendController.js` 신규 생성
-- [x] `index.js`에 `/api/friends` 라우트 등록
-
-**프론트엔드**
-- [x] 친구 페이지 신규 생성 (`/frontend/src/pages/FriendsPage.tsx`)
-  - 닉네임 검색창 (2자 이상, 이미 친구/요청받음 배지 표시)
-  - 친구 목록 탭 (인라인 삭제 확인)
-  - 받은 요청 탭 (수락/거절, 뱃지 카운트)
-- [x] `App.tsx`에 `/friends` 라우트 추가
-- [x] 대시보드 Nav 우측에 👥 친구 아이콘 버튼 추가
-
----
-
-### 3단계: 그룹 생성 (절약 대결용) (완료)
-
-**목표**: 친구들과 그룹을 만들어 절약 대결(챌린지) 진행
-
-**백엔드**
-- [x] Group 모델 (`/backend/src/models/Group.js`)
-  - `id, name, ownerId, startDate, endDate, goal(목표 지출 한도), createdAt, updatedAt`
-- [x] GroupMember 모델 (`/backend/src/models/GroupMember.js`)
-  - `id, groupId, userId, role(owner/member), status(pending/accepted), createdAt, updatedAt`
-- [x] `POST /api/groups` - 그룹 생성 (친구 동시 초대 가능, 친구 관계 검증)
-- [x] `GET /api/groups` - 내 그룹 목록
-- [x] `GET /api/groups/invites` - 받은 그룹 초대 목록
-- [x] `GET /api/groups/:id` - 그룹 상세 (멤버별 기간 내 지출 합계 포함)
-- [x] `POST /api/groups/:id/invite` - 그룹에 친구 추가 초대
-- [x] `PATCH /api/groups/invites/:inviteId/accept` - 초대 수락
-- [x] `PATCH /api/groups/invites/:inviteId/reject` - 초대 거절
-- [x] `DELETE /api/groups/:id/leave` - 그룹 탈퇴
-- [x] `DELETE /api/groups/:id` - 그룹 삭제 (방장만)
-- [x] `index.js`에 `/api/groups` 라우트 등록
-
-**프론트엔드**
-- [x] 그룹 페이지 (`/frontend/src/pages/GroupsPage.tsx`)
-  - 내 그룹 탭: 카드 클릭 → 상세 모달 (절약 랭킹, 지출 바 차트, 목표달성 뱃지)
-  - 받은 초대 탭: 수락/거절
-  - 그룹 생성 모달: 이름/기간/목표금액/친구 초대 한번에
-  - 그룹 상세 모달: 추가 초대, 그룹 삭제/탈퇴
-- [x] `App.tsx`에 `/groups` 라우트 추가
-- [x] 대시보드 Nav에 🏆 절약 대결 아이콘 버튼 추가
-
----
-
-### 4단계: 더치페이 친구 연동 (완료)
-
-**목표**: 더치페이 참여자 추가 시 이름 입력 대신 친구 목록에서 선택 가능하도록
-
-**DB 변경**
-- `dutch_pay_participants` 테이블에 `userId INT NULL` 컬럼 추가 (수동 ALTER 필요)
-  ```sql
-  ALTER TABLE coma_db.dutch_pay_participants ADD COLUMN userId INT NULL;
-  ```
-
-**백엔드**
-- [x] DutchPayParticipant 모델에 `userId` 컬럼 추가 + User association
-- [x] `createDutchPay`: participants를 `string[]` 대신 `{ name, userId? }[]`로 수신
-- [x] `getDutchPays`: 참여자 조회 시 연결된 User 정보(id, nickname, profileImage) 포함
-
-**프론트엔드**
-- [x] `ParticipantEntry` 타입 정의 (`{ name: string; userId?: number }`)
-- [x] 더치페이 생성 모달 UI 개선
-  - 각 참여자 슬롯에 👥 버튼 추가 → 드롭다운에서 친구 선택
-  - 친구 선택 시 보라색 chip으로 표시, ✕로 해제 가능
-  - 이미 선택된 친구는 드롭다운에서 제외
-  - 직접 입력과 친구 선택 혼용 가능
-
----
-
-### 5단계: 카카오 공유하기 SDK 연동 (완료)
-
-**목표**: 앱 초대 링크를 카카오톡으로 전송
-
-**방식**: 카카오 JavaScript SDK `Kakao.Share.sendDefault()` 사용
-- 비즈니스 심사 불필요, 사용자가 카카오 팝업에서 직접 받을 사람 선택
-
-**사전 설정 필요 (개발자)**
-1. 카카오 개발자 콘솔에서 JavaScript 키 확인
-2. `frontend/.env`에 `VITE_KAKAO_JS_KEY=발급받은키` 추가
-3. `VITE_APP_URL=배포된앱URL` 추가 (로컬은 http://localhost:5173)
-4. 카카오 개발자 콘솔 > 앱 설정 > 플랫폼 > Web에 앱 URL 등록
-
-**프론트엔드**
-- [x] 카카오 JS SDK 로드 (`index.html` script 태그)
-- [x] 유틸리티 파일 (`/frontend/src/lib/kakao.ts`)
-  - `initKakao()` - SDK 초기화 (중복 호출 방지)
-  - `shareInviteToFriend()` - 친구 초대 공유 (feed 템플릿)
-  - `shareGroupInvite()` - 그룹 초대 공유 (그룹명/기간 포함)
-- [x] 환경변수 추가 (`VITE_KAKAO_JS_KEY`, `VITE_APP_URL`)
-- [x] 친구 페이지 - "카카오톡으로 초대 링크 보내기" 버튼 (검색 카드 하단)
-- [x] 그룹 상세 모달 - "카카오톡으로 초대 링크 보내기" 버튼
-
--------------------
--------------------
-
--------------------
--------------------
-
-## DB 변경사항 및 실행 쿼리 정리
-
-> `sequelize.sync({ force: false })` 사용 중이므로 새 테이블/컬럼은 **자동 생성되지 않음**.
-> 아래 쿼리를 MySQL에서 직접 실행해야 한다.
-
----
-
-### 1단계 - DB 변경 없음
-
-기존 `users` 테이블의 `nickname`, `profileImage` 컬럼을 그대로 활용.
-
----
-
-### 2단계 - `friends` 테이블 신규 생성
-
-```sql
-CREATE TABLE IF NOT EXISTS friends (
-  id          INT AUTO_INCREMENT PRIMARY KEY,
-  requesterId INT NOT NULL,
-  receiverId  INT NOT NULL,
-  status      ENUM('pending', 'accepted', 'rejected') NOT NULL DEFAULT 'pending',
-  createdAt   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updatedAt   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (requesterId) REFERENCES users(id),
-  FOREIGN KEY (receiverId)  REFERENCES users(id)
-);
+### Friend (`friends` 테이블)
+```
+id, requesterId, receiverId, status(pending/accepted/rejected), createdAt, updatedAt
 ```
 
 ---
 
-### 3단계 - `groups`, `group_members` 테이블 신규 생성
+## DB 마이그레이션 (신규 컬럼 추가 필요)
+
+각 팀원의 로컬 DB에 아래 SQL을 실행해야 함:
 
 ```sql
-CREATE TABLE IF NOT EXISTS `groups` (
-  id        INT AUTO_INCREMENT PRIMARY KEY,
-  name      VARCHAR(255) NOT NULL,
-  ownerId   INT NOT NULL,
-  goal      INT NULL COMMENT '기간 내 목표 지출 한도(원)',
-  startDate DATE NOT NULL,
-  endDate   DATE NOT NULL,
-  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (ownerId) REFERENCES users(id)
-);
+-- groups 테이블에 categories 추가
+ALTER TABLE coma_db.`groups` ADD COLUMN categories JSON NULL;
 
-CREATE TABLE IF NOT EXISTS group_members (
-  id        INT AUTO_INCREMENT PRIMARY KEY,
-  groupId   INT NOT NULL,
-  userId    INT NOT NULL,
-  role      ENUM('owner', 'member') NOT NULL DEFAULT 'member',
-  status    ENUM('pending', 'accepted') NOT NULL DEFAULT 'pending',
-  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (groupId) REFERENCES `groups`(id),
-  FOREIGN KEY (userId)  REFERENCES users(id)
-);
-```
+-- transactions 테이블: excludeFromChallenge → excludedGroupIds 변경
+ALTER TABLE coma_db.transactions DROP COLUMN IF EXISTS excludeFromChallenge;
+ALTER TABLE coma_db.transactions ADD COLUMN excludedGroupIds JSON NULL;
 
----
+-- dutch_pay_participants 테이블에 linkedTransactionId 추가
+ALTER TABLE coma_db.dutch_pay_participants ADD COLUMN linkedTransactionId INT NULL;
 
-### 4단계 - `dutch_pay_participants` 테이블에 컬럼 추가
-
-```sql
+-- dutch_pay_participants 테이블에 userId 추가 (없는 경우)
 ALTER TABLE coma_db.dutch_pay_participants ADD COLUMN userId INT NULL;
 ```
 
----
-
-### 5단계 - DB 변경 없음
-
-카카오 공유하기 SDK는 프론트엔드만 수정. 백엔드/DB 변경 없음.
+> DB 관련 수정은 조원 이재호의 로컬 PC 기준이며, 각 사용자의 로컬 환경 및 DB 상태에 따라 알맞은 수정 필요.
 
 ---
 
-### 중복 인덱스 정리 (트러블슈팅)
+## 주요 변경 파일 (최근)
 
-`sequelize.sync({ alter: true })` 반복 실행으로 `users` 테이블에 중복 인덱스 64개 초과 발생 시:
+### 백엔드
 
-```sql
--- 인덱스 현황 확인
-SELECT INDEX_NAME, COLUMN_NAME
-FROM INFORMATION_SCHEMA.STATISTICS
-WHERE TABLE_SCHEMA = 'coma_db' AND TABLE_NAME = 'users'
-ORDER BY COLUMN_NAME, INDEX_NAME;
+| 파일 | 변경 내용 |
+|------|-----------|
+| `controllers/authController.js` | `devLogin` 핸들러 추가 (`findOrCreate`로 중복 방지) |
+| `routes/auth.js` | `POST /dev-login` 라우트 추가 |
+| `models/Group.js` | `categories: JSON` 컬럼 추가 |
+| `models/Transaction.js` | `excludeFromChallenge` 제거 → `excludedGroupIds: JSON` 추가 |
+| `models/DutchPayParticipant.js` | `userId: INT NULL`, `linkedTransactionId: INT NULL` 추가 |
+| `controllers/groupController.js` | 그룹 생성 시 `categories` 저장; 지출 집계에 `JSON_CONTAINS` + 카테고리 필터 적용 |
+| `controllers/transactionController.js` | `excludedGroupIds` 저장/수정 지원 |
+| `controllers/dutchPayController.js` | `getDutchPays`: 참여자 기준 조회 추가; `createDutchPay`: 전원 트랜잭션 생성; `deleteDutchPay`: 참여자 트랜잭션 일괄 삭제; `togglePaid`: 생성자 또는 본인만 가능 |
 
--- 중복 인덱스 일괄 제거 (kakaoId, naverId, email 각각 _2~_21 제거)
-ALTER TABLE coma_db.users
-  DROP INDEX email_2,    DROP INDEX email_3,    DROP INDEX email_4,
-  DROP INDEX email_5,    DROP INDEX email_6,    DROP INDEX email_7,
-  DROP INDEX email_8,    DROP INDEX email_9,    DROP INDEX email_10,
-  DROP INDEX email_11,   DROP INDEX email_12,   DROP INDEX email_13,
-  DROP INDEX email_14,   DROP INDEX email_15,   DROP INDEX email_16,
-  DROP INDEX email_17,   DROP INDEX email_18,   DROP INDEX email_19,
-  DROP INDEX email_20,   DROP INDEX email_21,
-  DROP INDEX kakaoId_2,  DROP INDEX kakaoId_3,  DROP INDEX kakaoId_4,
-  DROP INDEX kakaoId_5,  DROP INDEX kakaoId_6,  DROP INDEX kakaoId_7,
-  DROP INDEX kakaoId_8,  DROP INDEX kakaoId_9,  DROP INDEX kakaoId_10,
-  DROP INDEX kakaoId_11, DROP INDEX kakaoId_12, DROP INDEX kakaoId_13,
-  DROP INDEX kakaoId_14, DROP INDEX kakaoId_15, DROP INDEX kakaoId_16,
-  DROP INDEX kakaoId_17, DROP INDEX kakaoId_18, DROP INDEX kakaoId_19,
-  DROP INDEX kakaoId_20, DROP INDEX kakaoId_21,
-  DROP INDEX naverId_2,  DROP INDEX naverId_3,  DROP INDEX naverId_4,
-  DROP INDEX naverId_5,  DROP INDEX naverId_6,  DROP INDEX naverId_7,
-  DROP INDEX naverId_8,  DROP INDEX naverId_9,  DROP INDEX naverId_10,
-  DROP INDEX naverId_11, DROP INDEX naverId_12, DROP INDEX naverId_13,
-  DROP INDEX naverId_14, DROP INDEX naverId_15, DROP INDEX naverId_16,
-  DROP INDEX naverId_17, DROP INDEX naverId_18, DROP INDEX naverId_19,
-  DROP INDEX naverId_20, DROP INDEX naverId_21;
-```
+### 프론트엔드
 
-> 이후 재발 방지를 위해 `index.js`의 sync 옵션을 `{ force: false }`로 변경 완료.
+| 파일 | 변경 내용 |
+|------|-----------|
+| `pages/LoginPage.tsx` | 하단에 임시 개발용 로그인 버튼 추가 |
+| `pages/LoginPage.css` | `.login-dev-btn` 스타일 추가 |
+| `pages/GroupsPage.tsx` | 그룹 생성 모달에 카테고리 선택 UI 추가; 그룹 상세에 선택 카테고리 표시; UI 텍스트 "그룹" → "챌린지" 전면 변경 |
+| `pages/GroupsPage.css` | `.gr-all-cat-toggle`, `.gr-cat-grid`, `.gr-cat-chip` 스타일 추가 |
+| `pages/DashboardPage.tsx` | 아래 항목 참조 |
+| `pages/DashboardPage.css` | 아래 항목 참조 |
 
-위 DB 관련 수정은 조원:이재호 의 로컬 PC 기준이며, 각 사용자의 로컬 환경 및 DB 상태에 따라 알맞은 수정 및 조언이 필요.
+#### DashboardPage.tsx 주요 변경사항
+- `Transaction` 인터페이스에 `excludedGroupIds: number[] | null` 추가
+- `DutchPayParticipant` 인터페이스에 `userId`, `linkedTransactionId` 추가
+- `DutchPay` 인터페이스에 `userId: number` 추가
+- 거래 내역 추가/수정 모달: 진행 중인 챌린지 포함 여부 체크박스 (기본 체크)
+- 친구 요청 / 그룹 초대 30초 폴링 + 네비게이션 뱃지 표시
+- `DutchPayCreateModal`: 내가 기본 첫 번째 참여자로 포함; 왕관(👑) 버튼으로 대표 지출자 선택; 카테고리 항상 표시
+- `DutchPayView`: 친구가 참여자인 더치페이 표시; "(나)" 라벨; 생성자/본인만 삭제·체크 가능
+- 거래 내역 정산 상태 표시 수정:
+  - 비지출자 미정산 → **"정산 필요"** + 금액 주황색
+  - 비지출자 정산 완료 → **"정산 완료"**
+  - 대표 지출자 전원 미입금 → **"정산 중"**
+  - 대표 지출자 전원 입금 → **"정산 완료"**
+- 더치페이 카드 전체 클릭으로 펼치기/접기 (내부 버튼 `stopPropagation` 처리)
 
--------------------
--------------------
+#### DashboardPage.css 주요 추가 스타일
+- `.db-nav-icon-wrap`, `.db-nav-badge` — 네비게이션 알림 뱃지 (빨간 점)
+- `.db-challenge-list`, `.db-challenge-item`, `.db-challenge-item.included` — 챌린지 포함 체크박스
+- `.dutch-me-label`, `.dutch-payer-crown-btn`, `.dutch-payer-crown-btn.active` — 더치페이 UI
+- `.db-tx-amount.needs-settlement` — 정산 필요 금액 주황색 (`#e07a00`)
 
-
+---
 
 ## 파일 구조 (주요)
 
@@ -331,32 +175,41 @@ ALTER TABLE coma_db.users
 coma-main/
 ├── backend/
 │   ├── src/
-│   │   ├── config/db.js              # MySQL Sequelize 설정
-│   │   ├── middleware/auth.js        # JWT 인증 미들웨어
+│   │   ├── config/db.js
+│   │   ├── middleware/auth.js
 │   │   ├── models/
 │   │   │   ├── User.js
 │   │   │   ├── Transaction.js
 │   │   │   ├── DutchPay.js
-│   │   │   └── DutchPayParticipant.js
+│   │   │   ├── DutchPayParticipant.js
+│   │   │   ├── Group.js
+│   │   │   ├── GroupMember.js
+│   │   │   └── Friend.js
 │   │   ├── controllers/
 │   │   │   ├── authController.js
 │   │   │   ├── transactionController.js
-│   │   │   └── dutchPayController.js
+│   │   │   ├── dutchPayController.js
+│   │   │   ├── groupController.js
+│   │   │   └── friendController.js
 │   │   ├── routes/
 │   │   │   ├── auth.js
 │   │   │   ├── transactions.js
-│   │   │   └── dutchPays.js
-│   │   └── index.js                  # 서버 엔트리포인트
+│   │   │   ├── dutchPays.js
+│   │   │   ├── groups.js
+│   │   │   └── friends.js
+│   │   └── index.js
 │   └── package.json
 └── frontend/
     ├── src/
     │   ├── pages/
-    │   │   ├── LoginPage.tsx
+    │   │   ├── LoginPage.tsx / .css
     │   │   ├── AuthCallback.tsx
     │   │   ├── NaverCallback.tsx
-    │   │   ├── DashboardPage.tsx     # 메인 대시보드 (1300+ lines)
+    │   │   ├── DashboardPage.tsx / .css   # 메인 대시보드
+    │   │   ├── GroupsPage.tsx / .css      # 그룹 챌린지
+    │   │   ├── ProfilePage.tsx / .css     # 개인 페이지 (친구)
     │   │   └── LandingPage.tsx
-    │   └── services/api.ts           # Axios 클라이언트
+    │   └── services/api.ts
     └── package.json
 ```
 
@@ -378,7 +231,7 @@ CLIENT_URL
 ```
 VITE_API_URL          # 백엔드 API 주소 (예: http://localhost:4000)
 VITE_SOCKET_URL       # WebSocket 주소
-VITE_KAKAO_JS_KEY     # 카카오 JS SDK 키 
+VITE_KAKAO_JS_KEY     # 카카오 JS SDK 키
 ```
 
 ---
