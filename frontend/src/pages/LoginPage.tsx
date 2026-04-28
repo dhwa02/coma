@@ -1,7 +1,28 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import kakaoLoginImg from '../assets/kakao_login.png';
 import './LoginPage.css';
 
 export default function LoginPage() {
+  const navigate = useNavigate();
+  const [devLoading, setDevLoading] = useState(false);
+
+  const handleDevLogin = async () => {
+    setDevLoading(true);
+    try {
+      const res = await fetch('http://localhost:4000/api/auth/dev-login', {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error('로그인 실패');
+      navigate('/dashboard');
+    } catch (err) {
+      alert('임시 계정 로그인에 실패했습니다.');
+    } finally {
+      setDevLoading(false);
+    }
+  };
+
   return (
     <div className="login-wrap">
       <div className="login-blob login-blob1" />
@@ -39,6 +60,14 @@ export default function LoginPage() {
             네이버 로그인
           </button>
         </div>
+
+        <button
+          className="login-dev-btn"
+          onClick={handleDevLogin}
+          disabled={devLoading}
+        >
+          {devLoading ? '로그인 중...' : '임시 계정 로그인 (개발용)'}
+        </button>
       </div>
     </div>
   );

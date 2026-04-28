@@ -974,6 +974,20 @@ export default function DashboardPage() {
     retry: false,
   });
 
+  const { data: friendRequests = [] } = useQuery<unknown[]>({
+    queryKey: ['friendRequests'],
+    queryFn: () => api.get('/api/friends/requests').then(r => r.data),
+    retry: false,
+    refetchInterval: 30000,
+  });
+
+  const { data: groupInvites = [] } = useQuery<unknown[]>({
+    queryKey: ['groupInvites'],
+    queryFn: () => api.get('/api/groups/invites').then(r => r.data),
+    retry: false,
+    refetchInterval: 30000,
+  });
+
   // ── Mutations ──
   const createMutation = useMutation({
     mutationFn: (form: TransactionForm) =>
@@ -1119,12 +1133,18 @@ export default function DashboardPage() {
           >›</button>
         </div>
         <div className="db-nav-right">
-          <button className="db-nav-icon-btn" onClick={() => navigate('/groups')} title="절약 대결">
-            🏆
-          </button>
-          <button className="db-nav-icon-btn" onClick={() => navigate('/friends')} title="친구">
-            👥
-          </button>
+          <div className="db-nav-icon-wrap">
+            <button className="db-nav-icon-btn" onClick={() => navigate('/groups')} title="절약 대결">
+              🏆
+            </button>
+            {groupInvites.length > 0 && <span className="db-nav-badge" />}
+          </div>
+          <div className="db-nav-icon-wrap">
+            <button className="db-nav-icon-btn" onClick={() => navigate('/friends')} title="친구">
+              👥
+            </button>
+            {friendRequests.length > 0 && <span className="db-nav-badge" />}
+          </div>
           {user && (
             <button className="db-user-name db-profile-btn" onClick={() => navigate('/profile')}>
               {user.nickname}

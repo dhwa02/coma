@@ -378,7 +378,7 @@ CLIENT_URL
 ```
 VITE_API_URL          # 백엔드 API 주소 (예: http://localhost:4000)
 VITE_SOCKET_URL       # WebSocket 주소
-VITE_KAKAO_JS_KEY     # 카카오 JS SDK 키 (5단계에서 추가 예정)
+VITE_KAKAO_JS_KEY     # 카카오 JS SDK 키 
 ```
 
 ---

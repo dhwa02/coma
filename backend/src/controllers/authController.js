@@ -168,6 +168,28 @@ exports.getMe = async (req, res) => {
   res.json(user);
 };
 
+// POST /api/auth/dev-login >> 임시 개발용 테스트 계정 로그인
+exports.devLogin = async (req, res) => {
+  try {
+    const [user] = await User.findOrCreate({
+      where: { email: 'dev-test@coma.local' },
+      defaults: {
+        nickname: '테스트계정',
+        profileImage: null,
+        email: 'dev-test@coma.local',
+      },
+    });
+
+    const { accessToken, refreshToken } = issueTokens(user);
+    setTokenCookies(res, accessToken, refreshToken);
+
+    res.json({ user: { id: user.id, nickname: user.nickname, profileImage: user.profileImage } });
+  } catch (err) {
+    console.error('[Dev Login Error]', err);
+    res.status(500).json({ message: '임시 로그인 실패', error: err.message });
+  }
+};
+
 // POST /api/auth/logout
 exports.logout = (req, res) => {
   res.clearCookie('accessToken');

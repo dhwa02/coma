@@ -9,5 +9,6 @@ router.get('/naver', authController.naverLogin);
 router.post('/naver/token', authController.naverToken);
 router.get('/me', authMiddleware, authController.getMe);
 router.post('/logout', authController.logout);
+router.post('/dev-login', authController.devLogin);
 
 module.exports = router;

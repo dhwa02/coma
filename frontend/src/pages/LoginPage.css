@@ -152,6 +152,32 @@
   line-height: 1;
 }
 
+/* ── 임시 개발용 로그인 버튼 ── */
+.login-dev-btn {
+  margin-top: 20px;
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
+  border: 1.5px dashed #C4B5FD;
+  background: transparent;
+  color: #9E8CC5;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.login-dev-btn:hover {
+  background: #F5F0FF;
+  color: #7B52B9;
+}
+
+.login-dev-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 @keyframes login-fadeUp {
   from { opacity: 0; transform: translateY(24px); }
   to   { opacity: 1; transform: translateY(0); }
