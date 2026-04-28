@@ -1640,6 +1640,47 @@
 }
 .dutch-participant-amount.paid { color: var(--green-t); }
 
+/* ── Challenge Include Section ── */
+.dutch-challenge-section {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.dutch-challenge-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.dutch-challenge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dutch-challenge-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text2);
+  cursor: pointer;
+  padding: 4px 0;
+}
+.dutch-challenge-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.dutch-challenge-item.included {
+  color: var(--text1);
+  font-weight: 500;
+}
+
 /* ── Card Actions ── */
 .dutch-card-actions {
   display: flex;

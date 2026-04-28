@@ -160,12 +160,20 @@ ALTER TABLE coma_db.dutch_pay_participants ADD COLUMN userId INT NULL;
   - 대표 지출자 전원 미입금 → **"정산 중"**
   - 대표 지출자 전원 입금 → **"정산 완료"**
 - 더치페이 카드 전체 클릭으로 펼치기/접기 (내부 버튼 `stopPropagation` 처리)
+- `DutchPayView`에 더치페이 상세 보기 내 **챌린지 포함 설정 UI** 추가:
+  - `transactions`, `activeGroups` prop 추가
+  - 카드 펼칠 때 현재 유저의 연결 트랜잭션 `excludedGroupIds`를 `excludedMap` 로컬 상태로 초기화
+  - 대표 지출자는 `DutchPay.linkedTransactionId`, 비지출자는 `DutchPayParticipant.linkedTransactionId` 기준 적용
+  - 더치페이 카테고리와 매칭되는 진행 중 챌린지만 표시, 체크 = 포함 (기본값)
+  - 토글 시 `PUT /api/transactions/:id`로 `excludedGroupIds` 즉시 저장
+  - 연결 트랜잭션 없거나 매칭 챌린지 없으면 섹션 미표시
 
 #### DashboardPage.css 주요 추가 스타일
 - `.db-nav-icon-wrap`, `.db-nav-badge` — 네비게이션 알림 뱃지 (빨간 점)
 - `.db-challenge-list`, `.db-challenge-item`, `.db-challenge-item.included` — 챌린지 포함 체크박스
 - `.dutch-me-label`, `.dutch-payer-crown-btn`, `.dutch-payer-crown-btn.active` — 더치페이 UI
 - `.db-tx-amount.needs-settlement` — 정산 필요 금액 주황색 (`#e07a00`)
+- `.dutch-challenge-section`, `.dutch-challenge-label`, `.dutch-challenge-list`, `.dutch-challenge-item` — 더치페이 챌린지 포함 설정 UI (다크모드 대응: `--surface`, `--text1/2`, `--accent`, `--border` 변수 사용)
 
 ---
 

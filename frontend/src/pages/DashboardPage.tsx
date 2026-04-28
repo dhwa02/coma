@@ -485,6 +485,7 @@ function DutchPayCreateModal({ onClose, onSave, loading, currentUser }: DutchPay
 // ── Dutch Pay View ─────────────────────────────────────────────────
 interface DutchPayViewProps {
   dutchPays: DutchPay[];
+  transactions: Transaction[];
   isLoading: boolean;
   onAdd: () => void;
   onDelete: (id: number) => void;
@@ -493,10 +494,29 @@ interface DutchPayViewProps {
   togglingId: number | null;
   focusId?: number | null;
   currentUserId?: number | null;
+  activeGroups?: ActiveGroupSummary[];
 }
 
-function DutchPayView({ dutchPays, isLoading, onAdd, onDelete, onTogglePaid, deletingId, togglingId, focusId, currentUserId }: DutchPayViewProps) {
+function DutchPayView({ dutchPays, transactions, isLoading, onAdd, onDelete, onTogglePaid, deletingId, togglingId, focusId, currentUserId, activeGroups = [] }: DutchPayViewProps) {
+  const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  // txnId → excludedGroupIds 로컬 캐시 (트랜잭션 원본 데이터로 초기화)
+  const [excludedMap, setExcludedMap] = useState<Record<number, number[]>>({});
+
+  const updateExcludedMutation = useMutation({
+    mutationFn: ({ txnId, excludedGroupIds }: { txnId: number; excludedGroupIds: number[] }) =>
+      api.put(`/api/transactions/${txnId}`, { excludedGroupIds }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+    },
+  });
+
+  // 카드가 열릴 때 해당 트랜잭션의 실제 excludedGroupIds로 초기화
+  const initExcludedForTxn = (txnId: number) => {
+    if (txnId in excludedMap) return;
+    const txn = transactions.find(t => t.id === txnId);
+    setExcludedMap(prev => ({ ...prev, [txnId]: txn?.excludedGroupIds ?? [] }));
+  };
 
   useEffect(() => {
     if (focusId == null) return;
@@ -516,8 +536,20 @@ function DutchPayView({ dutchPays, isLoading, onAdd, onDelete, onTogglePaid, del
   const toggleExpand = (id: number) => {
     setExpanded(prev => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+        // 펼칠 때 현재 유저의 연결 트랜잭션 excludedGroupIds 초기화
+        const dp = dutchPays.find(d => d.id === id);
+        if (dp) {
+          const myParticipant = dp.participants.find(p => p.userId === currentUserId && !p.isPayer);
+          const myTxnId = dp.participants.find(p => p.userId === currentUserId && p.isPayer)
+            ? dp.linkedTransactionId
+            : (myParticipant?.linkedTransactionId ?? null);
+          if (myTxnId) initExcludedForTxn(myTxnId);
+        }
+      }
       return next;
     });
   };
@@ -666,6 +698,49 @@ function DutchPayView({ dutchPays, isLoading, onAdd, onDelete, onTogglePaid, del
                       </div>
                     </div>
                   )}
+
+                  {/* 챌린지 포함 설정 */}
+                  {(() => {
+                    const myParticipant = dp.participants.find(p => p.userId === currentUserId && !p.isPayer);
+                    const myTxnId = currentUserIsPayer
+                      ? dp.linkedTransactionId
+                      : (myParticipant?.linkedTransactionId ?? null);
+                    if (!myTxnId) return null;
+
+                    const matchingGroups = activeGroups.filter(g =>
+                      !dp.category || g.categories === null || g.categories.includes(dp.category)
+                    );
+                    if (matchingGroups.length === 0) return null;
+
+                    return (
+                      <div className="dutch-challenge-section" onClick={e => e.stopPropagation()}>
+                        <div className="dutch-challenge-label">📊 챌린지 포함 설정</div>
+                        <div className="dutch-challenge-list">
+                          {matchingGroups.map(g => {
+                            const excluded = excludedMap[myTxnId] ?? [];
+                            const isIncluded = !excluded.includes(g.id);
+                            return (
+                              <label key={g.id} className={`dutch-challenge-item${isIncluded ? ' included' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isIncluded}
+                                  onChange={() => {
+                                    const cur = excludedMap[myTxnId] ?? [];
+                                    const next = isIncluded
+                                      ? [...cur, g.id]
+                                      : cur.filter(id => id !== g.id);
+                                    setExcludedMap(prev => ({ ...prev, [myTxnId]: next }));
+                                    updateExcludedMutation.mutate({ txnId: myTxnId, excludedGroupIds: next });
+                                  }}
+                                />
+                                <span>{g.name}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   <div className="dutch-card-actions" onClick={e => e.stopPropagation()}>
                     <button className="dutch-share-btn" onClick={() => copyShareText(dp)}>
@@ -1319,6 +1394,8 @@ export default function DashboardPage() {
             togglingId={dutchTogglingId}
             focusId={dutchFocusId}
             currentUserId={user?.id ?? null}
+            transactions={transactions}
+            activeGroups={activeGroups}
           />
         ) : isLoading ? (
           <div className="db-empty">불러오는 중...</div>
