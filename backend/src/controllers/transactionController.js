@@ -1,5 +1,25 @@
 const { Op } = require('sequelize');
 const Transaction = require('../models/Transaction');
+const GroupMember = require('../models/GroupMember');
+const { computeGroupRanking } = require('./groupController');
+
+async function emitRankingUpdates(req) {
+  try {
+    const io = req.app.locals.io;
+    if (!io) return;
+    const memberships = await GroupMember.findAll({
+      where: { userId: req.user.id, status: 'accepted' },
+      attributes: ['groupId'],
+      raw: true,
+    });
+    for (const m of memberships) {
+      const members = await computeGroupRanking(m.groupId);
+      io.to(`group:${m.groupId}`).emit('ranking:update', { groupId: m.groupId, members });
+    }
+  } catch (err) {
+    console.error('[emitRankingUpdates]', err);
+  }
+}
 
 // GET /api/transactions?year=2026&month=4
 exports.getTransactions = async (req, res) => {
@@ -47,6 +67,7 @@ exports.createTransaction = async (req, res) => {
       excludedGroupIds: Array.isArray(excludedGroupIds) && excludedGroupIds.length > 0 ? excludedGroupIds : null,
     });
     res.status(201).json(transaction);
+    emitRankingUpdates(req);
   } catch (err) {
     console.error('[createTransaction]', err);
     res.status(500).json({ message: '등록 실패' });
@@ -76,6 +97,7 @@ exports.updateTransaction = async (req, res) => {
     });
 
     res.json(transaction);
+    emitRankingUpdates(req);
   } catch (err) {
     console.error('[updateTransaction]', err);
     res.status(500).json({ message: '수정 실패' });
@@ -95,6 +117,7 @@ exports.deleteTransaction = async (req, res) => {
 
     await transaction.destroy();
     res.json({ message: '삭제 완료' });
+    emitRankingUpdates(req);
   } catch (err) {
     console.error('[deleteTransaction]', err);
     res.status(500).json({ message: '삭제 실패' });

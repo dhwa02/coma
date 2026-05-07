@@ -4,6 +4,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const cookieParser = require('cookie-parser');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 
 const sequelize = require('./config/db');
 const authRoutes = require('./routes/auth');
@@ -33,6 +35,17 @@ app.use('/api/groups', groupRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: { origin: process.env.CLIENT_URL, credentials: true },
+});
+app.locals.io = io;
+
+io.on('connection', (socket) => {
+  socket.on('join-group', (groupId) => socket.join(`group:${groupId}`));
+  socket.on('leave-group', (groupId) => socket.leave(`group:${groupId}`));
+});
+
 const PORT = process.env.PORT || 4000;
 
 // alter:true는 재시작마다 중복 인덱스를 쌓는 Sequelize 버그가 있어 사용하지 않음
@@ -40,7 +53,7 @@ const PORT = process.env.PORT || 4000;
 sequelize.sync({ force: false })
   .then(() => {
     console.log('DB 연결 성공');
-    app.listen(PORT, () => console.log(`서버 실행 중: http://localhost:${PORT}`));
+    httpServer.listen(PORT, () => console.log(`서버 실행 중: http://localhost:${PORT}`));
   })
   .catch((err) => {
     console.error('DB 연결 실패:', err);

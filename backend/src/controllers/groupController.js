@@ -8,6 +8,52 @@ const Transaction = require('../models/Transaction');
 
 const USER_ATTRS = ['id', 'nickname', 'profileImage'];
 
+// 그룹 랭킹 계산 헬퍼 (transactionController에서도 사용)
+async function computeGroupRanking(groupId) {
+  const group = await Group.findByPk(groupId, {
+    include: [{
+      model: GroupMember,
+      as: 'members',
+      where: { status: 'accepted' },
+      include: [{ model: User, as: 'user', attributes: USER_ATTRS }],
+      required: false,
+    }],
+  });
+  if (!group || !group.members.length) return [];
+
+  const memberIds = group.members.map(m => m.userId);
+  const spendingWhere = {
+    userId: { [Op.in]: memberIds },
+    type: 'expense',
+    date: { [Op.between]: [group.startDate, group.endDate] },
+    [Op.and]: [
+      literal(`(excludedGroupIds IS NULL OR NOT JSON_CONTAINS(excludedGroupIds, CAST(${group.id} AS JSON)))`),
+    ],
+  };
+  if (group.categories && group.categories.length > 0) {
+    spendingWhere.category = { [Op.in]: group.categories };
+  }
+
+  const spendingRows = await Transaction.findAll({
+    attributes: ['userId', [fn('SUM', col('amount')), 'total']],
+    where: spendingWhere,
+    group: ['userId'],
+    raw: true,
+  });
+
+  const spendingMap = {};
+  spendingRows.forEach(r => { spendingMap[r.userId] = Number(r.total); });
+
+  return group.members.map(m => ({
+    memberId: m.id,
+    userId: m.userId,
+    role: m.role,
+    user: m.user,
+    totalExpense: spendingMap[m.userId] ?? 0,
+  })).sort((a, b) => a.totalExpense - b.totalExpense);
+}
+exports.computeGroupRanking = computeGroupRanking;
+
 // POST /api/groups
 exports.createGroup = async (req, res) => {
   const t = await sequelize.transaction();
@@ -138,36 +184,7 @@ exports.getGroupDetail = async (req, res) => {
     const isMember = group.members.some(m => m.userId === userId);
     if (!isMember) return res.status(403).json({ message: '그룹 멤버가 아닙니다.' });
 
-    // 각 멤버의 기간 내 지출 합계 조회 (챌린지 제외 내역 및 카테고리 필터 적용)
-    const memberIds = group.members.map(m => m.userId);
-    const spendingWhere = {
-      userId: { [Op.in]: memberIds },
-      type: 'expense',
-      date: { [Op.between]: [group.startDate, group.endDate] },
-      [Op.and]: [
-        literal(`(excludedGroupIds IS NULL OR NOT JSON_CONTAINS(excludedGroupIds, CAST(${group.id} AS JSON)))`),
-      ],
-    };
-    if (group.categories && group.categories.length > 0) {
-      spendingWhere.category = { [Op.in]: group.categories };
-    }
-    const spendingRows = await Transaction.findAll({
-      attributes: ['userId', [fn('SUM', col('amount')), 'total']],
-      where: spendingWhere,
-      group: ['userId'],
-      raw: true,
-    });
-
-    const spendingMap = {};
-    spendingRows.forEach(r => { spendingMap[r.userId] = Number(r.total); });
-
-    const membersWithSpending = group.members.map(m => ({
-      memberId: m.id,
-      userId: m.userId,
-      role: m.role,
-      user: m.user,
-      totalExpense: spendingMap[m.userId] ?? 0,
-    })).sort((a, b) => a.totalExpense - b.totalExpense);
+    const membersWithSpending = await computeGroupRanking(group.id);
 
     res.json({
       ...group.toJSON(),
