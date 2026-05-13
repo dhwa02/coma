@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
+import { getSocket } from '../services/socket';
 import { shareGroupInvite } from '../lib/kakao';
 import './GroupsPage.css';
 
@@ -222,6 +223,25 @@ function GroupDetailModal({ groupId, onClose, onDelete, onLeave, friends }: Deta
     queryKey: ['group', groupId],
     queryFn: () => api.get(`/api/groups/${groupId}`).then(r => r.data),
   });
+
+  useEffect(() => {
+    const socket = getSocket();
+    socket.emit('join-group', groupId);
+
+    const handleRankingUpdate = (data: { groupId: number; members: GroupMemberDetail[] }) => {
+      if (data.groupId !== groupId) return;
+      queryClient.setQueryData(['group', groupId], (old: Group | undefined) => {
+        if (!old) return old;
+        return { ...old, members: data.members };
+      });
+    };
+    socket.on('ranking:update', handleRankingUpdate);
+
+    return () => {
+      socket.emit('leave-group', groupId);
+      socket.off('ranking:update', handleRankingUpdate);
+    };
+  }, [groupId, queryClient]);
 
   const inviteMutation = useMutation({
     mutationFn: (userId: number) => api.post(`/api/groups/${groupId}/invite`, { userId }),
