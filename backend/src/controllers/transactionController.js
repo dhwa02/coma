@@ -1,23 +1,55 @@
 const { Op } = require('sequelize');
 const Transaction = require('../models/Transaction');
 const GroupMember = require('../models/GroupMember');
+const Group = require('../models/Group');
 const { computeGroupRanking } = require('./groupController');
+const { createNotification } = require('./notificationController');
 
-async function emitRankingUpdates(req) {
+// 트랜잭션 변경 전 그룹별 랭킹 스냅샷 수집 (활성 그룹만)
+async function captureGroupRankings(userId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const memberships = await GroupMember.findAll({
+    where: { userId, status: 'accepted' },
+    include: [{
+      model: Group,
+      where: { startDate: { [Op.lte]: today }, endDate: { [Op.gte]: today } },
+      required: true,
+    }],
+  });
+  const snapshot = new Map();
+  for (const m of memberships) {
+    snapshot.set(m.groupId, {
+      groupName: m.Group.name,
+      ranking: await computeGroupRanking(m.groupId),
+    });
+  }
+  return snapshot;
+}
+
+// 변경 후 랭킹 계산 → 소켓 emit + 순위 변동 알림
+async function emitRankingAndNotify(req, beforeSnapshot) {
   try {
     const io = req.app.locals.io;
     if (!io) return;
-    const memberships = await GroupMember.findAll({
-      where: { userId: req.user.id, status: 'accepted' },
-      attributes: ['groupId'],
-      raw: true,
-    });
-    for (const m of memberships) {
-      const members = await computeGroupRanking(m.groupId);
-      io.to(`group:${m.groupId}`).emit('ranking:update', { groupId: m.groupId, members });
+    for (const [groupId, { groupName, ranking: before }] of beforeSnapshot) {
+      const after = await computeGroupRanking(groupId);
+      io.to(`group:${groupId}`).emit('ranking:update', { groupId, members: after });
+
+      for (let newIdx = 0; newIdx < after.length; newIdx++) {
+        const member = after[newIdx];
+        const oldIdx = before.findIndex(m => m.userId === member.userId);
+        if (oldIdx === -1 || oldIdx === newIdx) continue;
+        const direction = newIdx < oldIdx ? '올랐습니다' : '내려갔습니다';
+        await createNotification(io, {
+          userId: member.userId,
+          type: 'ranking_change',
+          message: `'${groupName}' 챌린지 랭킹이 ${newIdx + 1}위로 ${direction}.`,
+          referenceId: groupId,
+        });
+      }
     }
   } catch (err) {
-    console.error('[emitRankingUpdates]', err);
+    console.error('[emitRankingAndNotify]', err);
   }
 }
 
@@ -56,6 +88,7 @@ exports.createTransaction = async (req, res) => {
   }
 
   try {
+    const snapshot = await captureGroupRankings(userId);
     const transaction = await Transaction.create({
       userId,
       type,
@@ -67,7 +100,7 @@ exports.createTransaction = async (req, res) => {
       excludedGroupIds: Array.isArray(excludedGroupIds) && excludedGroupIds.length > 0 ? excludedGroupIds : null,
     });
     res.status(201).json(transaction);
-    emitRankingUpdates(req);
+    emitRankingAndNotify(req, snapshot);
   } catch (err) {
     console.error('[createTransaction]', err);
     res.status(500).json({ message: '등록 실패' });
@@ -86,6 +119,7 @@ exports.updateTransaction = async (req, res) => {
       return res.status(404).json({ message: '거래 내역을 찾을 수 없습니다.' });
     }
 
+    const snapshot = await captureGroupRankings(userId);
     await transaction.update({
       type,
       amount: Number(amount),
@@ -97,7 +131,7 @@ exports.updateTransaction = async (req, res) => {
     });
 
     res.json(transaction);
-    emitRankingUpdates(req);
+    emitRankingAndNotify(req, snapshot);
   } catch (err) {
     console.error('[updateTransaction]', err);
     res.status(500).json({ message: '수정 실패' });
@@ -115,9 +149,10 @@ exports.deleteTransaction = async (req, res) => {
       return res.status(404).json({ message: '거래 내역을 찾을 수 없습니다.' });
     }
 
+    const snapshot = await captureGroupRankings(userId);
     await transaction.destroy();
     res.json({ message: '삭제 완료' });
-    emitRankingUpdates(req);
+    emitRankingAndNotify(req, snapshot);
   } catch (err) {
     console.error('[deleteTransaction]', err);
     res.status(500).json({ message: '삭제 실패' });

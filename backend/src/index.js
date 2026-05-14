@@ -14,6 +14,7 @@ const dutchPayRoutes = require('./routes/dutchPays');
 const userRoutes = require('./routes/users');
 const friendRoutes = require('./routes/friends');
 const groupRoutes = require('./routes/groups');
+const notificationRoutes = require('./routes/notifications');
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/dutch-pays', dutchPayRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -44,6 +46,7 @@ app.locals.io = io;
 io.on('connection', (socket) => {
   socket.on('join-group', (groupId) => socket.join(`group:${groupId}`));
   socket.on('leave-group', (groupId) => socket.leave(`group:${groupId}`));
+  socket.on('join-user', (userId) => socket.join(`user:${userId}`));
 });
 
 const PORT = process.env.PORT || 4000;

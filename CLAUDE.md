@@ -54,6 +54,30 @@ npm 버전 업데이트또한 절대 진행하지 말것
 - 친구 요청 대기 중이면 👥 아이콘에 빨간 뱃지 표시 (30초 폴링)
 - 그룹 초대 대기 중이면 🏆 아이콘에 빨간 뱃지 표시 (30초 폴링)
 
+
+### 260514
+### 통합 알림 센터 (Notification Center)
+- 대시보드 우측 상단 🔔 벨 아이콘 클릭 시 드롭다운 패널 표시
+- 읽지 않은 알림 수 숫자 뱃지 표시 (최대 9+ 표시)
+- 알림 클릭 시 읽음 처리 + 해당 페이지로 자동 이동
+  - `friend_request` / `friend_accepted` → `/friends`
+  - `group_invite` / `group_invite_accepted` / `group_invite_rejected` / `ranking_change` → `/groups`
+  - `dutch_settled` → 대시보드 더치페이 탭 + 해당 항목 포커스
+- "모두 읽음" 버튼으로 일괄 처리
+- **실시간 push**: Socket.IO `join-user` 이벤트로 개인 룸(`user:${userId}`) 참여 → 새 알림 발생 시 `new-notification` 이벤트로 즉시 수신
+- 30초 폴링 fallback 병행
+- **알림 생성 시점 및 타입** (type 컬럼: `VARCHAR(50)`):
+
+| 타입 | 트리거 | 수신자 |
+|------|--------|--------|
+| `friend_request` 👥 | 친구 요청 전송 | 수신자 |
+| `friend_accepted` 🤝 | 친구 요청 수락 | 요청자 |
+| `group_invite` 🏆 | 챌린지 초대 (생성 시 일괄 / 개별) | 초대된 유저 |
+| `group_invite_accepted` 🎉 | 챌린지 초대 수락 | 그룹 오너 |
+| `group_invite_rejected` ❌ | 챌린지 초대 거절 | 그룹 오너 |
+| `dutch_settled` ✅ | 더치페이 정산 완료 (본인 지출자 제외) | 대표 지출자 |
+| `ranking_change` 📊 | 트랜잭션 변경 후 순위 이동 (활성 그룹만, before·after 비교) | 순위 변동 멤버 |
+
 ---
 
 ## DB 모델 현황
@@ -102,6 +126,12 @@ id, groupId, userId, role(owner/member), status(pending/accepted), createdAt, up
 id, requesterId, receiverId, status(pending/accepted/rejected), createdAt, updatedAt
 ```
 
+### Notification (`notifications` 테이블)
+```
+id, userId(수신자 FK), type(VARCHAR 50 — 7가지 타입),
+message, isRead(default false), referenceId(관련 레코드 ID), createdAt, updatedAt
+```
+
 ---
 
 ## DB 마이그레이션 (신규 컬럼 추가 필요)
@@ -121,6 +151,26 @@ ALTER TABLE coma_db.dutch_pay_participants ADD COLUMN linkedTransactionId INT NU
 
 -- dutch_pay_participants 테이블에 userId 추가 (없는 경우)
 ALTER TABLE coma_db.dutch_pay_participants ADD COLUMN userId INT NULL;
+
+
+-- 260514 
+-- notifications 테이블 생성 (알림 센터 기능)
+CREATE TABLE IF NOT EXISTS coma_db.notifications (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  userId INT NOT NULL,
+  type VARCHAR(50) NOT NULL,
+  message VARCHAR(255) NOT NULL,
+  isRead TINYINT(1) NOT NULL DEFAULT 0,
+  referenceId INT NULL,
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+```
+> `notifications` 테이블은 `sequelize.sync({ force: false })`로 자동 생성되므로 위 SQL은 수동 생성이 필요한 경우에만 사용.
+
+```sql
+-- notifications 테이블이 이미 ENUM으로 생성된 경우 VARCHAR로 변경
+ALTER TABLE coma_db.notifications MODIFY COLUMN type VARCHAR(50) NOT NULL;
 ```
 
 > DB 관련 수정은 조원 이재호의 로컬 PC 기준이며, 각 사용자의 로컬 환경 및 DB 상태에 따라 알맞은 수정 필요.
@@ -129,58 +179,8 @@ ALTER TABLE coma_db.dutch_pay_participants ADD COLUMN userId INT NULL;
 
 ## 주요 변경 파일 (최근)
 
-### 백엔드
-
-| 파일 | 변경 내용 |
-|------|-----------|
-| `controllers/authController.js` | `devLogin` 핸들러 추가 (`findOrCreate`로 중복 방지) |
-| `routes/auth.js` | `POST /dev-login` 라우트 추가 |
-| `models/Group.js` | `categories: JSON` 컬럼 추가 |
-| `models/Transaction.js` | `excludeFromChallenge` 제거 → `excludedGroupIds: JSON` 추가 |
-| `models/DutchPayParticipant.js` | `userId: INT NULL`, `linkedTransactionId: INT NULL` 추가 |
-| `controllers/groupController.js` | 그룹 생성 시 `categories` 저장; 지출 집계에 `JSON_CONTAINS` + 카테고리 필터 적용 |
-| `controllers/transactionController.js` | `excludedGroupIds` 저장/수정 지원 |
-| `controllers/dutchPayController.js` | `getDutchPays`: 참여자 기준 조회 추가; `createDutchPay`: 전원 트랜잭션 생성; `deleteDutchPay`: 참여자 트랜잭션 일괄 삭제; `togglePaid`: 생성자 또는 본인만 가능 |
-
-### 프론트엔드
-
-| 파일 | 변경 내용 |
-|------|-----------|
-| `pages/LoginPage.tsx` | 하단에 임시 개발용 로그인 버튼 추가 |
-| `pages/LoginPage.css` | `.login-dev-btn` 스타일 추가 |
-| `pages/GroupsPage.tsx` | 그룹 생성 모달에 카테고리 선택 UI 추가; 그룹 상세에 선택 카테고리 표시; UI 텍스트 "그룹" → "챌린지" 전면 변경 |
-| `pages/GroupsPage.css` | `.gr-all-cat-toggle`, `.gr-cat-grid`, `.gr-cat-chip` 스타일 추가 |
-| `pages/DashboardPage.tsx` | 아래 항목 참조 |
-| `pages/DashboardPage.css` | 아래 항목 참조 |
-
-#### DashboardPage.tsx 주요 변경사항
-- `Transaction` 인터페이스에 `excludedGroupIds: number[] | null` 추가
-- `DutchPayParticipant` 인터페이스에 `userId`, `linkedTransactionId` 추가
-- `DutchPay` 인터페이스에 `userId: number` 추가
-- 거래 내역 추가/수정 모달: 진행 중인 챌린지 포함 여부 체크박스 (기본 체크)
-- 친구 요청 / 그룹 초대 30초 폴링 + 네비게이션 뱃지 표시
-- `DutchPayCreateModal`: 내가 기본 첫 번째 참여자로 포함; 왕관(👑) 버튼으로 대표 지출자 선택; 카테고리 항상 표시
-- `DutchPayView`: 친구가 참여자인 더치페이 표시; "(나)" 라벨; 생성자/본인만 삭제·체크 가능
-- 거래 내역 정산 상태 표시 수정:
-  - 비지출자 미정산 → **"정산 필요"** + 금액 주황색
-  - 비지출자 정산 완료 → **"정산 완료"**
-  - 대표 지출자 전원 미입금 → **"정산 중"**
-  - 대표 지출자 전원 입금 → **"정산 완료"**
-- 더치페이 카드 전체 클릭으로 펼치기/접기 (내부 버튼 `stopPropagation` 처리)
-- `DutchPayView`에 더치페이 상세 보기 내 **챌린지 포함 설정 UI** 추가:
-  - `transactions`, `activeGroups` prop 추가
-  - 카드 펼칠 때 현재 유저의 연결 트랜잭션 `excludedGroupIds`를 `excludedMap` 로컬 상태로 초기화
-  - 대표 지출자는 `DutchPay.linkedTransactionId`, 비지출자는 `DutchPayParticipant.linkedTransactionId` 기준 적용
-  - 더치페이 카테고리와 매칭되는 진행 중 챌린지만 표시, 체크 = 포함 (기본값)
-  - 토글 시 `PUT /api/transactions/:id`로 `excludedGroupIds` 즉시 저장
-  - 연결 트랜잭션 없거나 매칭 챌린지 없으면 섹션 미표시
-
-#### DashboardPage.css 주요 추가 스타일
-- `.db-nav-icon-wrap`, `.db-nav-badge` — 네비게이션 알림 뱃지 (빨간 점)
-- `.db-challenge-list`, `.db-challenge-item`, `.db-challenge-item.included` — 챌린지 포함 체크박스
-- `.dutch-me-label`, `.dutch-payer-crown-btn`, `.dutch-payer-crown-btn.active` — 더치페이 UI
-- `.db-tx-amount.needs-settlement` — 정산 필요 금액 주황색 (`#e07a00`)
-- `.dutch-challenge-section`, `.dutch-challenge-label`, `.dutch-challenge-list`, `.dutch-challenge-item` — 더치페이 챌린지 포함 설정 UI (다크모드 대응: `--surface`, `--text1/2`, `--accent`, `--border` 변수 사용)
+- **다크모드 개선**
+- **모바일 터치 개선** 
 
 ---
 
@@ -199,19 +199,22 @@ coma-main/
 │   │   │   ├── DutchPayParticipant.js
 │   │   │   ├── Group.js
 │   │   │   ├── GroupMember.js
-│   │   │   └── Friend.js
+│   │   │   ├── Friend.js
+│   │   │   └── Notification.js            # 신규
 │   │   ├── controllers/
 │   │   │   ├── authController.js
 │   │   │   ├── transactionController.js
 │   │   │   ├── dutchPayController.js
 │   │   │   ├── groupController.js
-│   │   │   └── friendController.js
+│   │   │   ├── friendController.js
+│   │   │   └── notificationController.js  # 신규
 │   │   ├── routes/
 │   │   │   ├── auth.js
 │   │   │   ├── transactions.js
 │   │   │   ├── dutchPays.js
 │   │   │   ├── groups.js
-│   │   │   └── friends.js
+│   │   │   ├── friends.js
+│   │   │   └── notifications.js           # 신규
 │   │   └── index.js
 │   └── package.json
 └── frontend/

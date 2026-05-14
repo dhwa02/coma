@@ -5,6 +5,7 @@ const GroupMember = require('../models/GroupMember');
 const User = require('../models/User');
 const Friend = require('../models/Friend');
 const Transaction = require('../models/Transaction');
+const { createNotification } = require('./notificationController');
 
 const USER_ATTRS = ['id', 'nickname', 'profileImage'];
 
@@ -100,6 +101,20 @@ exports.createGroup = async (req, res) => {
     }
 
     await t.commit();
+
+    // 초대 알림 전송 (트랜잭션 커밋 후)
+    if (inviteeIds.length > 0) {
+      const io = req.app.locals.io;
+      for (const uid of inviteeIds) {
+        await createNotification(io, {
+          userId: uid,
+          type: 'group_invite',
+          message: `${req.user.nickname}님이 '${group.name}' 챌린지에 초대했습니다.`,
+          referenceId: group.id,
+        });
+      }
+    }
+
     res.status(201).json({ id: group.id, name: group.name });
   } catch (err) {
     await t.rollback();
@@ -209,6 +224,15 @@ exports.inviteMember = async (req, res) => {
     if (already) return res.status(409).json({ message: '이미 초대했거나 멤버입니다.' });
 
     await GroupMember.create({ groupId: group.id, userId: inviteeId, role: 'member', status: 'pending' });
+
+    const io = req.app.locals.io;
+    await createNotification(io, {
+      userId: inviteeId,
+      type: 'group_invite',
+      message: `${req.user.nickname}님이 '${group.name}' 챌린지에 초대했습니다.`,
+      referenceId: group.id,
+    });
+
     res.status(201).json({ message: '초대를 보냈습니다.' });
   } catch (err) {
     console.error('[inviteMember Error]', err);
@@ -226,6 +250,18 @@ exports.acceptInvite = async (req, res) => {
 
     invite.status = 'accepted';
     await invite.save();
+
+    const group = await Group.findByPk(invite.groupId, { attributes: ['name', 'ownerId'] });
+    if (group) {
+      const io = req.app.locals.io;
+      await createNotification(io, {
+        userId: group.ownerId,
+        type: 'group_invite_accepted',
+        message: `${req.user.nickname}님이 '${group.name}' 챌린지 초대를 수락했습니다.`,
+        referenceId: invite.groupId,
+      });
+    }
+
     res.json({ message: '그룹에 참여했습니다.' });
   } catch (err) {
     console.error('[acceptInvite Error]', err);
@@ -241,7 +277,19 @@ exports.rejectInvite = async (req, res) => {
     if (invite.userId !== req.user.id) return res.status(403).json({ message: '권한이 없습니다.' });
     if (invite.status !== 'pending') return res.status(400).json({ message: '처리할 수 없는 초대입니다.' });
 
+    const group = await Group.findByPk(invite.groupId, { attributes: ['name', 'ownerId'] });
     await invite.destroy();
+
+    if (group) {
+      const io = req.app.locals.io;
+      await createNotification(io, {
+        userId: group.ownerId,
+        type: 'group_invite_rejected',
+        message: `${req.user.nickname}님이 '${group.name}' 챌린지 초대를 거절했습니다.`,
+        referenceId: invite.groupId,
+      });
+    }
+
     res.json({ message: '초대를 거절했습니다.' });
   } catch (err) {
     console.error('[rejectInvite Error]', err);

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import dayjs from 'dayjs';
@@ -8,6 +8,7 @@ import {
   ResponsiveContainer, Cell, PieChart, Pie, Legend,
 } from 'recharts';
 import api from '../services/api';
+import { getSocket } from '../services/socket';
 import './DashboardPage.css';
 
 dayjs.locale('ko');
@@ -43,6 +44,15 @@ interface ActiveGroupSummary {
 }
 
 type ViewMode = 'list' | 'calendar' | 'stats' | 'dutch';
+
+interface AppNotification {
+  id: number;
+  type: 'friend_request' | 'friend_accepted' | 'group_invite' | 'group_invite_accepted' | 'group_invite_rejected' | 'dutch_settled' | 'ranking_change';
+  message: string;
+  isRead: boolean;
+  referenceId: number | null;
+  createdAt: string;
+}
 
 // ── Dutch Pay Types ─────────────────────────────────────────────────
 interface DutchPayParticipant {
@@ -259,6 +269,69 @@ function DeleteConfirm({ onCancel, onConfirm, loading }: DeleteConfirmProps) {
           <button className="db-btn-cancel" onClick={onCancel}>취소</button>
           <button className="db-btn-delete" onClick={onConfirm} disabled={loading}>{loading ? '삭제 중...' : '삭제'}</button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Notification Panel ────────────────────────────────────────────
+const NOTIF_ICONS: Record<AppNotification['type'], string> = {
+  friend_request: '👥',
+  friend_accepted: '🤝',
+  group_invite: '🏆',
+  group_invite_accepted: '🎉',
+  group_invite_rejected: '❌',
+  dutch_settled: '✅',
+  ranking_change: '📊',
+};
+
+interface NotificationPanelProps {
+  notifications: AppNotification[];
+  onClickNotif: (n: AppNotification) => void;
+  onMarkAllRead: () => void;
+  onClose: () => void;
+}
+
+function NotificationPanel({ notifications, onClickNotif, onMarkAllRead, onClose }: NotificationPanelProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [onClose]);
+
+  return (
+    <div className="notif-panel" ref={panelRef}>
+      <div className="notif-panel-header">
+        <span className="notif-panel-title">알림</span>
+        {notifications.some(n => !n.isRead) && (
+          <button className="notif-read-all-btn" onClick={onMarkAllRead}>모두 읽음</button>
+        )}
+      </div>
+      <div className="notif-list">
+        {notifications.length === 0 ? (
+          <div className="notif-empty">새로운 알림이 없어요</div>
+        ) : (
+          notifications.map(n => (
+            <div
+              key={n.id}
+              className={`notif-item${n.isRead ? '' : ' unread'}`}
+              onClick={() => onClickNotif(n)}
+            >
+              <span className="notif-item-icon">{NOTIF_ICONS[n.type]}</span>
+              <div className="notif-item-body">
+                <div className="notif-item-msg">{n.message}</div>
+                <div className="notif-item-time">{dayjs(n.createdAt).format('MM/DD HH:mm')}</div>
+              </div>
+              {!n.isRead && <span className="notif-dot" />}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -1083,6 +1156,7 @@ export default function DashboardPage() {
   const [fabOpen, setFabOpen] = useState(false);
   const [fabDefaultType, setFabDefaultType] = useState<'income' | 'expense'>('expense');
   const [dutchFocusId, setDutchFocusId] = useState<number | null>(null);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const year = currentDate.year();
   const month = currentDate.month() + 1;
@@ -1129,6 +1203,24 @@ export default function DashboardPage() {
     retry: false,
     refetchInterval: 30000,
   });
+
+  const { data: notifications = [] } = useQuery<AppNotification[]>({
+    queryKey: ['notifications'],
+    queryFn: () => api.get('/api/notifications').then(r => r.data),
+    retry: false,
+    refetchInterval: 30000,
+    enabled: !!user,
+  });
+
+  // 소켓: 개인 룸 참여 + 실시간 알림 수신
+  useEffect(() => {
+    if (!user) return;
+    const socket = getSocket();
+    socket.emit('join-user', user.id);
+    const handler = () => queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    socket.on('new-notification', handler);
+    return () => { socket.off('new-notification', handler); };
+  }, [user, queryClient]);
 
   // ── Mutations ──
   const createMutation = useMutation({
@@ -1186,6 +1278,29 @@ export default function DashboardPage() {
       setDutchTogglingId(null);
     },
   });
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: number) => api.patch(`/api/notifications/${id}/read`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: () => api.patch('/api/notifications/read-all'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+  });
+
+  const handleNotifClick = (n: AppNotification) => {
+    if (!n.isRead) markReadMutation.mutate(n.id);
+    setShowNotifications(false);
+    if (n.type === 'friend_request' || n.type === 'friend_accepted') {
+      navigate('/friends');
+    } else if (n.type === 'group_invite' || n.type === 'group_invite_accepted' || n.type === 'group_invite_rejected' || n.type === 'ranking_change') {
+      navigate('/groups');
+    } else if (n.type === 'dutch_settled') {
+      setViewMode('dutch');
+      if (n.referenceId) setDutchFocusId(n.referenceId);
+    }
+  };
 
   const handleDeleteDutch = (id: number) => {
     setDutchDeletingId(id);
@@ -1286,6 +1401,28 @@ export default function DashboardPage() {
               👥
             </button>
             {friendRequests.length > 0 && <span className="db-nav-badge" />}
+          </div>
+          <div className="db-nav-icon-wrap notif-wrap">
+            <button
+              className="db-nav-icon-btn"
+              onClick={() => setShowNotifications(v => !v)}
+              title="알림"
+            >
+              🔔
+            </button>
+            {notifications.filter(n => !n.isRead).length > 0 && (
+              <span className="db-nav-badge notif-count-badge">
+                {notifications.filter(n => !n.isRead).length > 9 ? '9+' : notifications.filter(n => !n.isRead).length}
+              </span>
+            )}
+            {showNotifications && (
+              <NotificationPanel
+                notifications={notifications}
+                onClickNotif={handleNotifClick}
+                onMarkAllRead={() => markAllReadMutation.mutate()}
+                onClose={() => setShowNotifications(false)}
+              />
+            )}
           </div>
           {user && (
             <button className="db-user-name db-profile-btn" onClick={() => navigate('/profile')}>

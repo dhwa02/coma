@@ -3,6 +3,7 @@ const DutchPay = require('../models/DutchPay');
 const DutchPayParticipant = require('../models/DutchPayParticipant');
 const Transaction = require('../models/Transaction');
 const User = require('../models/User');
+const { createNotification } = require('./notificationController');
 
 const PARTICIPANT_INCLUDE = {
   model: DutchPayParticipant,
@@ -173,6 +174,20 @@ exports.togglePaid = async (req, res) => {
 
     const newPaid = !participant.isPaid;
     await participant.update({ isPaid: newPaid, paidAt: newPaid ? new Date() : null });
+
+    // 정산 완료 시 대표 지출자에게 알림
+    if (newPaid) {
+      const payerParticipant = await DutchPayParticipant.findOne({ where: { dutchPayId: id, isPayer: true } });
+      if (payerParticipant?.userId && payerParticipant.userId !== userId) {
+        const io = req.app.locals.io;
+        await createNotification(io, {
+          userId: payerParticipant.userId,
+          type: 'dutch_settled',
+          message: `${participant.name}님이 '${dutchPay.title}' 더치페이를 정산했습니다.`,
+          referenceId: dutchPay.id,
+        });
+      }
+    }
 
     // 대표 지출자의 거래 내역 금액 업데이트 (정산될수록 실질 지출 감소)
     if (dutchPay.linkedTransactionId) {

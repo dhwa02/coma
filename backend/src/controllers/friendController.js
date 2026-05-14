@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const Friend = require('../models/Friend');
 const User = require('../models/User');
+const { createNotification } = require('./notificationController');
 
 const USER_ATTRS = ['id', 'nickname', 'profileImage'];
 
@@ -38,6 +39,15 @@ exports.sendRequest = async (req, res) => {
     }
 
     const request = await Friend.create({ requesterId, receiverId, status: 'pending' });
+
+    const io = req.app.locals.io;
+    await createNotification(io, {
+      userId: receiverId,
+      type: 'friend_request',
+      message: `${req.user.nickname}님이 친구 요청을 보냈습니다.`,
+      referenceId: request.id,
+    });
+
     res.status(201).json(request);
   } catch (err) {
     console.error('[sendRequest Error]', err);
@@ -55,6 +65,15 @@ exports.acceptRequest = async (req, res) => {
 
     friend.status = 'accepted';
     await friend.save();
+
+    const io = req.app.locals.io;
+    await createNotification(io, {
+      userId: friend.requesterId,
+      type: 'friend_accepted',
+      message: `${req.user.nickname}님이 친구 요청을 수락했습니다.`,
+      referenceId: friend.id,
+    });
+
     res.json({ message: '친구 요청을 수락했습니다.' });
   } catch (err) {
     console.error('[acceptRequest Error]', err);
