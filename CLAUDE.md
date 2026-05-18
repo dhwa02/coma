@@ -54,9 +54,7 @@ npm 버전 업데이트또한 절대 진행하지 말것
 - 친구 요청 대기 중이면 👥 아이콘에 빨간 뱃지 표시 (30초 폴링)
 - 그룹 초대 대기 중이면 🏆 아이콘에 빨간 뱃지 표시 (30초 폴링)
 
-
-### 260514
-### 통합 알림 센터 (Notification Center)
+### 통합 알림 센터 (Notification Center) - 260514
 - 대시보드 우측 상단 🔔 벨 아이콘 클릭 시 드롭다운 패널 표시
 - 읽지 않은 알림 수 숫자 뱃지 표시 (최대 9+ 표시)
 - 알림 클릭 시 읽음 처리 + 해당 페이지로 자동 이동
@@ -77,6 +75,41 @@ npm 버전 업데이트또한 절대 진행하지 말것
 | `group_invite_rejected` ❌ | 챌린지 초대 거절 | 그룹 오너 |
 | `dutch_settled` ✅ | 더치페이 정산 완료 (본인 지출자 제외) | 대표 지출자 |
 | `ranking_change` 📊 | 트랜잭션 변경 후 순위 이동 (활성 그룹만, before·after 비교) | 순위 변동 멤버 |
+
+### 버그 수정 및 단위 테스트 - 260518
+
+- 아래 버그 수정 완
+BUG 1 — `groupController.js` 친구가 아닌 사람에게 초대 알림 발송 (심각)
+BUG 2 — `friendController.js` 거절된 친구 요청 재전송 시 알림 미발송 (중간)
+BUG 3 — `dutchPayController.js` createDutchPay DB 트랜잭션 미사용 (중간)
+
+- 단위 테스트
+| 우선순위 | 테스트 ID | 이유 |
+|----------|-----------|------|
+| **P0** | D8, G3, F4 | 수정된 버그 회귀 방지 (BUG 1, 2, 3 검증) |
+| **P1** | A1~A5, T4, T5, G4, G6, F5, F7 | 인증·인가 관련 — 보안 직결 |
+| **P2** | D1~D7, G1, G2, G7~G9 | 핵심 비즈니스 로직 |
+| **P3** | T1, T3, T6, F1~F3, F6, F8, G5, G10, G11 | 부가 기능 및 엣지 케이스 |
+
+- 테스트 코드는 `backend/src/__tests__/` 폴더에 위치한다.
+
+| 파일명 | 커버하는 테스트 ID | 비고 |
+|--------|-------------------|------|
+| `setup.js` | — | JWT_SECRET 등 테스트용 환경변수 설정 (setupFiles) |
+| `authMiddleware.test.js` | A1 ~ A5 | supertest + 미니 Express 앱 사용, DB 불필요 |
+| `transactionController.test.js` | T1 ~ T6 | 모델 mock, 컨트롤러 함수 직접 호출 |
+| `dutchPayController.test.js` | D1 ~ D8 | 모델 + sequelize.transaction() mock |
+| `groupController.test.js` | G1 ~ G11 | 모델 + computeGroupRanking 직접 테스트 포함 |
+| `friendController.test.js` | F1 ~ F8 | 모델 mock, BUG 2 회귀 테스트 포함 |
+| `notificationController.test.js` | N1 ~ N5 | 모델 mock, io.emit 호출 검증 포함 |
+
+- 설정 파일:
+
+| 파일명 | 역할 |
+|--------|------|
+| `backend/jest.config.js` | Jest 설정 (testMatch, setupFiles, timeout) |
+
+
 
 ---
 
@@ -177,10 +210,6 @@ ALTER TABLE coma_db.notifications MODIFY COLUMN type VARCHAR(50) NOT NULL;
 
 ---
 
-## 주요 변경 파일 (최근)
-
-- **다크모드 개선**
-- **모바일 터치 개선** 
 
 ---
 

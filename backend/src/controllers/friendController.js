@@ -34,6 +34,13 @@ exports.sendRequest = async (req, res) => {
         existing.requesterId = requesterId;
         existing.receiverId = receiverId;
         await existing.save();
+        const io = req.app.locals.io;
+        await createNotification(io, {
+          userId: receiverId,
+          type: 'friend_request',
+          message: `${req.user.nickname}님이 친구 요청을 보냈습니다.`,
+          referenceId: existing.id,
+        });
         return res.status(201).json({ message: '친구 요청을 다시 보냈습니다.' });
       }
     }

@@ -1,4 +1,5 @@
 const { Op } = require('sequelize');
+const sequelize = require('../config/db');
 const DutchPay = require('../models/DutchPay');
 const DutchPayParticipant = require('../models/DutchPayParticipant');
 const Transaction = require('../models/Transaction');
@@ -54,6 +55,7 @@ exports.createDutchPay = async (req, res) => {
   const payerUserId = payerParticipant?.userId ?? null;
   const isUserPayer = payerUserId === userId;
 
+  const t = await sequelize.transaction();
   try {
     // 대표 지출자 거래 내역 생성
     let linkedTransactionId = null;
@@ -66,7 +68,7 @@ exports.createDutchPay = async (req, res) => {
         memo: title,
         date,
         paymentMethod: '더치페이',
-      });
+      }, { transaction: t });
       linkedTransactionId = txn.id;
     }
 
@@ -80,7 +82,7 @@ exports.createDutchPay = async (req, res) => {
       isUserPayer,
       linkedTransactionId,
       category: category || null,
-    });
+    }, { transaction: t });
 
     // 참여자 레코드 생성 + 비지불자 중 userId 있는 사람도 거래 내역 생성
     const participantRecords = [];
@@ -99,7 +101,7 @@ exports.createDutchPay = async (req, res) => {
           memo: title,
           date,
           paymentMethod: '더치페이',
-        });
+        }, { transaction: t });
         participantLinkedTxnId = txn.id;
       }
 
@@ -114,7 +116,8 @@ exports.createDutchPay = async (req, res) => {
       });
     }
 
-    await DutchPayParticipant.bulkCreate(participantRecords);
+    await DutchPayParticipant.bulkCreate(participantRecords, { transaction: t });
+    await t.commit();
 
     const result = await DutchPay.findOne({
       where: { id: dutchPay.id },
@@ -123,6 +126,7 @@ exports.createDutchPay = async (req, res) => {
 
     res.status(201).json(result);
   } catch (err) {
+    await t.rollback();
     console.error('[createDutchPay]', err);
     res.status(500).json({ message: '등록 실패' });
   }

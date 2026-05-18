@@ -80,6 +80,7 @@ exports.createGroup = async (req, res) => {
     );
 
     // 초대된 친구들 pending 상태로 추가 (친구 관계 확인)
+    let validIds = new Set();
     if (inviteeIds.length > 0) {
       const friendships = await Friend.findAll({
         where: {
@@ -90,7 +91,7 @@ exports.createGroup = async (req, res) => {
           ],
         },
       });
-      const validIds = new Set(friendships.map(f =>
+      validIds = new Set(friendships.map(f =>
         f.requesterId === ownerId ? f.receiverId : f.requesterId
       ));
 
@@ -102,10 +103,10 @@ exports.createGroup = async (req, res) => {
 
     await t.commit();
 
-    // 초대 알림 전송 (트랜잭션 커밋 후)
-    if (inviteeIds.length > 0) {
+    // 초대 알림 전송 (트랜잭션 커밋 후, 실제 초대된 validIds에게만)
+    if (validIds.size > 0) {
       const io = req.app.locals.io;
-      for (const uid of inviteeIds) {
+      for (const uid of validIds) {
         await createNotification(io, {
           userId: uid,
           type: 'group_invite',
